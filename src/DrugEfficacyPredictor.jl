@@ -1,5 +1,121 @@
 module DrugEfficacyPredictor
+using CSV, DataFrames, DataStructures, Distributions, SpecialFunctions
+include("distributional_parameters.jl")
 include("types.jl")
+include("data_handling.jl")
+include("dream_challenge_data.jl")
+
+
+function initialize_probability_model(experiment::Experiment)
+	# set counting variables
+	T = length(experiment.results)
+	K = length(experiment.views)
+	N = Vector{Int64}(T)
+	# for each drug, store mean and standard deviation, used for normalization
+	for (t, drug) in enumerate(keys(experiment.results))
+		N[t] = length(experiment.results[drug].outcome_values)
+		vals = collect(values(experiment.results[drug].outcome_values))
+		experiment.results[drug].outcome_mean = mean(vals)
+		experiment.results[drug].outcome_std = stdm(vals, experiment.results[drug].outcome_mean)
+	end
+	# create predictor model
+	PredictionModel(T, K, N)
+end
+
+"""
+Creates a DrugEfficacyPredictor object, holding the probabilistic model, all the data and
+the kernel functions.
+"""
+function create_drug_efficacy_predictor(experiment::Experiment)
+	# initialize object
+	dep = DrugEfficacyPrediction(experiment, initialize_probability_model(experiment))
+	all_drugs = collect(keys(dep.experiment.results)) # the tasks
+	# for all drugs normalize target data across available cell lines
+	for drug in all_drugs
+		cell_lines = collect(keys(dep.experiment.results[drug].outcome_values))
+		#normalize the data
+		dep.targets[drug] = (collect(values(dep.experiment.results[drug].outcome_values)) .- dep.experiment.results[drug].outcome_mean)./dep.experiment.results[drug].outcome_std
+		dep.kernels[drug] = create_kernel_matrices(dep, cell_lines)
+	end
+end
+
+""" Creates the kernal matrices (one for each "view") that encode cell line similarity. """
+function create_kernel_matrices(dep::DrugEfficacyPrediction, cell_lines::Vector{CellLine})
+	kernels = Vector{Matrix{Float64}}()
+	for v in dep.experiment.views
+		data_views = map(cl -> cl.views[v], cell_lines)
+		push!(kernels, compute_kernel(dep, data_views))
+	end
+	kernels
+end
+
+function compute_kernel(dep::DrugEfficacyPrediction, dvs::Vector{DataView{K, V}}) where {K, V <: ViewType}
+	N = length(dvs)
+	k = Matrix{Float64}(N,N)
+
+	# find overlapping genes for each pairing
+	for i in 1:N, j in i:N
+		common_keys = intersect(collect(keys(dvs[i].measurements)), collect(keys(dvs[j].measurements)))
+		x = map(k -> dvs[i].measurements[k], common_keys)
+		x_prime = map(k -> dvs[j].measurements[k], common_keys)
+
+		# create kernel matrix entries, kernel matrix will be symmetric
+		k[i,j] = kernel_function(dep, x, x_prime)
+		if i≠j k[j,i] = k[i,j] end
+	end
+	k
+end
+
+# TODO: implement kernel functions for different view types: GeneExpression, 
+# Methylation, RNASeq, ExomeSeq, RPPA, CNV
+
+function kernel_function(dep::DrugEfficacyPrediction, x::T, x_prime::T) where {T <: ViewType}
+
+end
+
+
+# actual variational inference algorithm
+function parameter_inference(dep::DrugEfficacyPrediction)
+	m = dep.model
+	all_tasks = collect(keys(dep.experiment.results))
+
+	kernel_products = Dict{Drug, Matrix{Float64}}()
+	for (t, d) in enumerate(all_tasks)
+		views = dep.kernels[d]
+		kp = zeros(m.N[t], m.N[t])
+		[kp += kernel'*kernel for kernel in views]
+		kernel_products[d] = kp
+	end
+	# updates for model parameters in turn
+	ll = 0
+	# lambda, a
+	for (t, drug) in enumerate(all_tasks)
+		aaT = expected_squared_value(m.a[t])
+		for n in 1:m.N[t]
+			m.λ[t][n].variational_a = m.λ[t][n].prior_a + .5
+			m.λ[t][n].variational_b = m.λ[t][n].prior_b + .5*aaT[n,n]
+		end
+		m.a[t].variational_covariance = inv(diagm(expected_value.(m.λ[t])) + expected_value(m.ν[t]).*kernel_products[drug])
+		
+		m.a[t].variational_mean = m.a[t].variational_covariance*
+	end
+	# gamma
+	for t in 1:m.T
+		m.ɣ.variational_a = m.ɣ.prior_a + .5
+		m.ɣ.variational_b = m.ɣ.prior_b + expected_squared_value(m.b[t])
+		#TODO: compute log likelihood E_q[ln p(gamma)] - E_q[ln q(gamma)]
+	end
+
+
+end
+
+
+function prepare_predictor(experiment::Experiment)
+	# compute the kernel matrices
+end
+
+
+
 
 ########################
 ######### TODO #########
@@ -15,124 +131,5 @@ include("types.jl")
 
 # split application and API
 
-########################
-######### TODO #########
-########################
-
-
-# create the overall data set
-create_experiment() = Experiment()
-
-# get a cell line object for an experiment
-get_cell_line(experiment::Experiment, cell_line_id::String, cancer_type::String) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type))
-
-# add a data view to the experiment
-add_dataview!{T,D}(e::Experiment{T,D}, d::DataView{T,D}) = union!(e.measurements, d)
-add_dataview{T,D}(e::Experiment{T,D}, d::DataView{T,D}) = union(e.measurements, d)
-
-# add an empty data view to the experiment, associated with a cell line
-add_dataview!(e::Experiment, cl::CellLine) = union!(e.measurements, DataView{T,D}(cl))
-add_dataview(e::Experiment, cl::CellLine) = union(e.measurements, DataView{T,D}(cl))
-
-# add a measurement, i.e. a gene/protein data pair to a data view
-function add_measurement!{T,D}(d::DataView{T,D}, subject::T, measurement::D)
-	d.data[subject] = measurement
-	d
-end
-
-# add an outcome of a drug to the experiment
-function add_outcome!(e::Experiment, d::Drug, o::Outcome)
-	e.results[d] = o
-	e
-end
-
-# add results for a drug on a cell line to an outcome
-add_result!(o::Outcome, c::CellLine, result::Float64) = o.outcome_values[cl] = result
-
-# add results for a given array of results
-add_results!(o::Outcome, results::Dict{CellLine, Float64}) = o.outcome_values = results
-function add_results!(o::Outcome, cell_lines::Vector{CellLine}, results::Vector{Float64})
-	if length(cell_lines) != length(results)
-		throw(DimensionMismatch("You must provide a matching number of results. Got $(length(cell_lines)) cell lines but $(length(results)) results"))
-	end
-	for (cl,res) in zip(cell_lines, results)
-		add_result!(o, cl, res)
-	end
-end
-
-##################### I/O #####################
-
-function import_dream_challenge_data(directory::String)
-	experiment = create_experiment()
-	for f in readdir(directory)
-		if !endswith(f,".txt") || endswith(f, "README.txt")
-			continue
-		end
-		data_type_string = replace(f, "DREAM7_DrugSensitivity1_", "")
-		key_type = Gene
-		if data_type_string == "Exomeseq"
-			data_type = ExomeSeq
-		elseif data_type_string == "GeneExpression"
-			data_type = GeneExpression
-		elseif data_type_string == "Methylation"
-			data_type = Methylation
-		elseif data_type_string == "RNAseq_expressed_calls" || data_type_string == "RNAseq_quantification"
-			data_type = RNAseq
-		elseif data_type_string == "RPPA"
-			key_type = Protein
-			data_type = RPPA
-		elseif data_type_string == "SNP6"
-			data_type = CNV
-		end
-		process_data_frame(df, key_type, data_type, experiment)
-	end
-end
-
-function process_data_frame(f::String, gene_type::Gene, exome_data::ExomeSeq, experiment::Experiment)
-	type_vector = Vector{DataType}(27)
-	fill!(type_vector, String)
-	df = CSV.read(f, DataFrame, delim='\t', types=type_vector, null=".")
-	all_cell_lines = unique(df[:CellLine])
-	for cl in all_cell_lines
-		# get the cell line object somehow, possibly query an experiment-wide dictionary
-		cl_obj = CellLine(cl, "Breast cancer")
-
-		#create the data view, unknown key type
-		key_type = #combination of gene and protein change
-		data_view = DataView{key_type, ExomeSeq}(cl_obj)
-
-		cl_df = view(df, df[:CellLine] .== cl)
-		for hgnc_id in unique(cl_df[:HGNC_ID])
-			gene_view = view(cl_df, cl_df[:HGNC_ID] .== hgnc_id)
-			for data_row in eachrow(gene_view)
-				num_cosmic = data_row[Symbol("#COSMIC")]
-				variant_effect = data_row[:Type]
-				protein_change = data_row[:Summary]
-				nucleotid_change = data_row[:AltBase]
-				variant_confidence = data_row[:Confidence]
-				norm_zygosity = data_row[Symbol("Zygosity(norm)")]
-				norm_reference_count = data_row[Symbol("RefCount(norm)")]
-				norm_variant_count = data_row[Symbol("AltCount(norm)")]
-				tumor_zygosity = data_row[Symbol("Zygosity(tumor)")]
-				tumor_reference_count = data_row[Symbol("RefCount(tumor)")]
-				tumor_variant_count = data_row[Symbol("AltCount(tumor)")]
-				reference_mismatch_avg = data_row[Symbol("Avg#Mismatch(ref)")]
-				variant_mismatch_avg = data_row[Symbol("Avg#Mismatch(alt)")]
-				reference_mismatch_sum = data_row[Symbol("MismatchQualitySum(ref)")]
-				variant_mismatch_sum = data_row[Symbol("MismatchQualitySum(alt)")]
-				reference_dist3effective_avg = data_row[Symbol("DistanceEffective3'End(ref)")]
-				variant_dist3effective_avg = data_row[Symbol("DistanceEffective3'End(alt)")]
-				details = data_row[:Details]
-
-				#create some exome data view, create a key type for exome sequencing as a combination
-				#of gene and protein change
-				exome_data = (...)
-
-				add_measurement(data_view, key, exome_data)
-			end
-		end
-	end
-	experiment
-end
 
 end # module
