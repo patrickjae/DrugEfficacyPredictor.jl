@@ -114,8 +114,8 @@ dictionary of views, i.e. different data collected for this cell line.
 struct CellLine <: Sample
 	id::String
 	cancer_type::String
-	views::OrderedDict{Type, DataView}
-	CellLine(id::String, cancer_type::String="unknown") = new(id, cancer_type, OrderedDict{Type, DataView}())
+	views::OrderedDict{Type{<:ViewType}, DataView}
+	CellLine(id::String, cancer_type::String="unknown") = new(id, cancer_type, OrderedDict{Type{<:ViewType}, DataView}())
 end
 
 
@@ -247,6 +247,20 @@ struct ExomeSeq <: ViewType
 	variant_dist3effective_avg::Float64
 	details::String
 	normalized_value::Float64
+	function ExomeSeq(reference_mismatch_sum::Float64, reference_mismatch_avg::Float64, reference_dist3effective_avg::Float64,
+		variant_mismatch_sum::Float64, variant_mismatch_avg::Float64, variant_dist3effective_avg::Float64; 
+		num_cosmic::Int64=0, variant_effect::String="", protein_change::String="", nucleotid_change::String="",
+		variant_confidence::Float64=1., norm_zygosity::String="", norm_reference_count::Int64=0, norm_variant_count::Int64=0,
+		tumor_zygosity::String="", tumor_reference_count::Int64=0, tumor_variant_count::Int64=0, details::String="")
+		data_summary = reference_mismatch_avg + variant_mismatch_avg
+						+ reference_mismatch_sum + variant_mismatch_sum
+						+ reference_dist3effective_avg + variant_dist3effective_avg
+		new(num_cosmic, variant_effect, protein_change, nucleotid_change, variant_confidence,
+			norm_zygosity, norm_reference_count, norm_variant_count, tumor_zygosity, tumor_reference_count, tumor_variant_count,
+			reference_mismatch_avg, variant_mismatch_avg, reference_mismatch_sum, variant_mismatch_sum,
+			reference_dist3effective_avg, variant_dist3effective_avg, details,
+			data_summary)
+	end
 end
 
 """ Protein abundance value. """

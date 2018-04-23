@@ -128,18 +128,25 @@ function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment
 		reference_dist3effective_avg = data_row[Symbol("DistanceEffective3'end(ref)")].value
 		variant_dist3effective_avg = data_row[Symbol("DistanceEffective3'end(alt)")].value
 		details = data_row[:Details].value
-		data_summary = reference_mismatch_avg + variant_mismatch_avg + reference_mismatch_sum + variant_mismatch_sum + reference_dist3effective_avg + variant_dist3effective_avg
+		# data_summary = reference_mismatch_avg + variant_mismatch_avg + reference_mismatch_sum + variant_mismatch_sum + reference_dist3effective_avg + variant_dist3effective_avg
 		key = (gene, protein_change)
 		#create some exome data view, create a key type for exome sequencing as a combination
 		#of gene and protein change
-		exome_data = ExomeSeq(num_cosmic, variant_effect, protein_change,
-				nucleotid_change, variant_confidence, 
-				norm_zygosity, norm_reference_count, norm_variant_count,
-				tumor_zygosity, tumor_reference_count, tumor_variant_count,
-				reference_mismatch_avg, variant_mismatch_avg,
-				reference_mismatch_sum, variant_mismatch_sum,
-				reference_dist3effective_avg, variant_dist3effective_avg,
-				details, data_summary)
+		# exome_data = ExomeSeq(num_cosmic, variant_effect, protein_change,
+		# 		nucleotid_change, variant_confidence, 
+		# 		norm_zygosity, norm_reference_count, norm_variant_count,
+		# 		tumor_zygosity, tumor_reference_count, tumor_variant_count,
+		# 		reference_mismatch_avg, variant_mismatch_avg,
+		# 		reference_mismatch_sum, variant_mismatch_sum,
+		# 		reference_dist3effective_avg, variant_dist3effective_avg,
+		# 		details, data_summary)
+		exome_data = ExomeSeq(reference_mismatch_sum, reference_mismatch_avg, reference_dist3effective_avg,
+								variant_mismatch_sum, variant_mismatch_avg, variant_dist3effective_avg,
+								num_cosmic=num_cosmic, variant_effect=variant_effect, protein_change=protein_change,
+								nucleotid_change=nucleotid_change, variant_confidence=variant_confidence,
+								norm_zygosity=norm_zygosity, norm_reference_count=norm_reference_count, norm_variant_count=norm_variant_count,
+								tumor_zygosity=tumor_zygosity, tumor_reference_count=tumor_reference_count, tumor_variant_count=tumor_variant_count,
+								details=details)
 
 		add_measurement!(data_view, key, exome_data)
 	end
