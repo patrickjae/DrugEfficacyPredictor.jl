@@ -4,6 +4,9 @@ include("distributional_parameters.jl")
 include("types.jl")
 include("data_handling.jl")
 include("dream_challenge_data.jl")
+include("webservice.jl")
+
+include("import_json.jl")
 
 
 function initialize_probability_model(experiment::Experiment)
@@ -37,6 +40,7 @@ function create_drug_efficacy_predictor(experiment::Experiment)
 		dep.targets[drug] = (collect(values(dep.experiment.results[drug].outcome_values)) .- dep.experiment.results[drug].outcome_mean)./dep.experiment.results[drug].outcome_std
 		dep.kernels[drug] = create_kernel_matrices(dep, cell_lines)
 	end
+	dep
 end
 
 """ Creates the kernal matrices (one for each "view") that encode cell line similarity. """
@@ -73,6 +77,18 @@ function kernel_function(dep::DrugEfficacyPrediction, x::T, x_prime::T) where {T
 
 end
 
+function data_likelihood(dep::DrugEfficacyPrediction)
+	m = dep.model
+	ll = 0.
+	for (t, drug) in enumerate(keys(dep.experiment.results))
+		y_mean = sum(expected_value.(m.G[t,:]) .* expected_value.(m.e) .+ expected_value(m.b[t]))
+		y_cov = expected_value(m.ε[t]).*eye(m.N[t])
+
+		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov), values(dep.experiment.results[drug].normalized_outcome_values))
+	end
+	ll
+end
+
 
 # actual variational inference algorithm
 function parameter_inference(dep::DrugEfficacyPrediction)
@@ -91,13 +107,16 @@ function parameter_inference(dep::DrugEfficacyPrediction)
 	# lambda, a
 	for (t, drug) in enumerate(all_tasks)
 		aaT = expected_squared_value(m.a[t])
+		bbT = expected_squared_value(m.b[t])
 		for n in 1:m.N[t]
 			m.λ[t][n].variational_a = m.λ[t][n].prior_a + .5
 			m.λ[t][n].variational_b = m.λ[t][n].prior_b + .5*aaT[n,n]
 		end
+		ll += elbo.(m.λ[t])
+
 		m.a[t].variational_covariance = inv(diagm(expected_value.(m.λ[t])) + expected_value(m.ν[t]).*kernel_products[drug])
 		
-		m.a[t].variational_mean = m.a[t].variational_covariance*
+		# m.a[t].variational_mean = m.a[t].variational_covariance*
 	end
 	# gamma
 	for t in 1:m.T

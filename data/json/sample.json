@@ -1,0 +1,34 @@
+{
+	"experiment_id":"test_id",
+	"id" : "my_cell_line",
+	"cancer_type" : "Breast cancer",
+	"views" :
+	{
+		"Methylation" :
+		[
+			{
+				"gene_id" : 12345,
+				"cgct1" : 1,
+				"cct1" : 2,
+				"beta_value" : 0.25,
+				"is_methylated" : true,
+				"illumina_id" : "blabla_id"
+			}
+		],
+		"ExomeSeq" :
+		[
+			{
+				"gene_id" : "my_gene_2",
+				"type_id" : "hgnc_id",
+				"is_cancer_gene" : true,
+				"protein_change" : "at_protein_x",
+				"reference_mismatch_avg" : 4.0,
+				"reference_mismatch_sum" : 120.0,
+				"reference_dist3effective_avg" : 5.0,
+				"variant_mismatch_avg" : 3.0,
+				"variant_mismatch_sum" : 25.0,
+				"variant_dist3effective_avg" : 2.0
+			}
+		]
+	}
+}
