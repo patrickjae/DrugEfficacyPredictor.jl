@@ -1,9 +1,46 @@
+######### EXPERIMENT ###########
+
 # create the overall data set
 create_experiment() = Experiment()
 
+
+######### CELL LINES ###########
 # get a cell line object for an experiment or creates a new one
 get_cell_line(experiment::Experiment, cell_line_id::String, cancer_type::String) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type))
 
+function get_cell_line(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "id") || !haskey(data, "cancer_type")
+		throw(ArgumentError("You need to provide a cell line id and the cancer type."))
+	end
+	get_cell_line(experiment, data["id"], data["cancer_type"])
+end
+######### VIEWS ###########
+add_view!(experiment::Experiment, view::Type{<:ViewType}) = union!(experiment.views, [view])
+
+
+function normalize_data_views(experiment::Experiment)
+	for v in experiment.views
+		all_values = Float64[]
+		#collect all values
+		for cl in values(experiment.cell_lines)
+			if haskey(cl.views, v)
+				all_values.push!(all_values, map(get_measurement_value, collect(values(cl.views[v]))))
+			end
+		end
+		view_mean = mean(all_values)
+		view_std = stdm(all_values, view_mean)
+		for cl in values(experiment.cell_lines)
+			if haskey(cl.views, v)
+				f = (x) -> (x-view_mean)/view_std
+				measurements = collect(values(cl.views[v]))
+				norm_vals = map(f, map(get_measurement_value, measurements))
+				map((m, nv) -> set_normalized_value(m, nv), zip(measurements, norm_vals))
+			end
+		end
+	end
+end
+
+######### GENES ###########
 function add_gene(experiment::Experiment, gene::Gene) 
 	experiment.genes[gene.entrez_id] = gene
 	experiment.genes_by_hgnc[gene.hgnc_id] = gene
@@ -11,7 +48,7 @@ function add_gene(experiment::Experiment, gene::Gene)
 	gene
 end
 
-function add_gene(experiment::Experiment, gene_id::String, id_type::String="hgnc_id"; is_cancer_gene::Bool=false)
+function add_gene(experiment::Experiment, gene_id::Union{Int64, String}, id_type::String="entrez_id"; is_cancer_gene::Bool=false)
 	try
 		return get_gene(experiment, gene_id, id_type)
 	catch KeyError
@@ -22,17 +59,19 @@ function add_gene(experiment::Experiment, gene_id::String, id_type::String="hgnc
 	end
 end
 
+function add_gene(experiment::Experiment, data::Dict{String, Any})
+	display(data)
+	if !haskey(data, "gene_id")
+		throw(ArgumentError("You need to provide a gene id."))
+	end
+	gene_id = data["gene_id"]
+	id_type = get(data, "type_id", "entrez_id")
+	is_cancer_gene = get(data, "is_cancer_gene", false)
+	add_gene(experiment, gene_id, id_type, is_cancer_gene = is_cancer_gene)
+end
 function add_gene(experiment::Experiment, gene_id::Int64; is_cancer_gene::Bool=false)
 	get!(experiment.genes, gene_id, Gene(gene_id, is_cancer_gene))
 end
-
-function add_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false)
-	p_obj = Protein(hgnc_id, fully_validated)
-	experiment.proteins[hgnc_id] = p_obj
-	p_obj
-end
-
-get_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false) = get!(experiment.proteins, hgnc_id, Protein(hgnc_id, fully_validated))
 
 function add_gene_id!(experiment::Experiment, gene::Gene, id::String, id_type::String)
 	if id_type == "hgnc_id"
@@ -48,7 +87,7 @@ function add_gene_id!(experiment::Experiment, gene::Gene, id::String, id_type::S
 	end
 end
 
-function add_gene_id!(experiment::Experiment, gene::Gene, entrez_id::Int64)
+function add_gene_id!(experiment::Experiment, gene::Gene, entrez_id::Int64, id_type::String)
 	gene.entrez_id = entrez_id
 	experiment.genes[entrez_id] = gene
 end
@@ -62,9 +101,21 @@ function get_gene(experiment::Experiment, gene_id::String, id_type::String="hgnc
 	end
 end
 
-get_gene(experiment::Experiment, gene_id::Int64) = experiment.genes[gene_id]
+get_gene(experiment::Experiment, gene_id::Int64, id_type::String="entrez_id") = experiment.genes[gene_id]
 
 
+######### PROTEINS ###########
+function add_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false)
+	p_obj = Protein(hgnc_id, fully_validated)
+	experiment.proteins[hgnc_id] = p_obj
+	p_obj
+end
+
+get_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false) = get!(experiment.proteins, hgnc_id, Protein(hgnc_id, fully_validated))
+
+
+
+######### DATA VIEWS ###########
 # add a data view to the cell line
 add_dataview!(cl::CellLine, d::DataView{T,D}) where {T,D} = cl.views[D] = d
 add_dataview(cl::CellLine, d::DataView{T,D}) where {T,D}  = cl.views[D] = d
@@ -72,6 +123,8 @@ add_dataview(cl::CellLine, d::DataView{T,D}) where {T,D}  = cl.views[D] = d
 # get a data view for a certain data type from a cell line or create if not present
 get_dataview(cl::CellLine, data_type::Type) = cl.views[data_type]
 
+
+######### MEASUREMENTS ###########
 # add a measurement, i.e. a gene/protein data pair to a data view
 function add_measurement(d::DataView{T,D}, subject::T, measurement::D) where {T,D}
 	try
@@ -104,6 +157,8 @@ get_measurement_value(d::RNASeq) = (d.expression_value, d.expression_status)
 get_measurement_value(d::RPPA) = d.protein_abundance
 get_measurement_value(d::CNV) = d.gene_level_cnv
 
+
+######### NORMALIZATION ###########
 function set_normalized_value(d::T, value::Float64) where {T <: ViewType}
 	d.normalized_value = value
 end
@@ -111,12 +166,9 @@ end
 get_normalized_value(d::DataView{T, D}, subject::T) where {T, D <: ViewType} = d.measurements[subject].normalized_value
 get_normalized_value(d::T) where {T <: ViewType} = d.normalized_value
 
-# add an outcome of a drug to the experiment
-function add_outcome!(e::Experiment, d::Drug, o::Outcome)
-	e.results[d] = o
-	e
-end
 
+
+######### RESULTS ###########
 # add results for a drug on a cell line to an outcome
 add_result!(o::Outcome, cl::CellLine, result::Float64) = o.outcome_values[cl] = result
 
@@ -132,27 +184,10 @@ function add_results!(o::Outcome, cell_lines::Vector{CellLine}, results::Vector{
 	end
 end
 
-add_view!(experiment::Experiment, view::Type{<:ViewType}) = union!(experiment.views, [view])
 
-
-function normalize_data_views(experiment::Experiment)
-	for v in experiment.views
-		all_values = Float64[]
-		#collect all values
-		for cl in values(experiment.cell_lines)
-			if haskey(cl.views, v)
-				all_values.push!(all_values, map(get_measurement_value, collect(values(cl.views[v]))))
-			end
-		end
-		view_mean = mean(all_values)
-		view_std = stdm(all_values, view_mean)
-		for cl in values(experiment.cell_lines)
-			if haskey(cl.views, v)
-				f = (x) -> (x-view_mean)/view_std
-				measurements = collect(values(cl.views[v]))
-				norm_vals = map(f, map(get_measurement_value, measurements))
-				map((m, nv) -> set_normalized_value(m, nv), zip(measurements, norm_vals))
-			end
-		end
-	end
+######### OUTCOME ###########
+# add an outcome of a drug to the experiment
+function add_outcome!(e::Experiment, d::Drug, o::Outcome)
+	e.results[d] = o
+	e
 end
