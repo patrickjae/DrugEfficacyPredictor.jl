@@ -60,7 +60,6 @@ function add_gene(experiment::Experiment, gene_id::Union{Int64, String}, id_type
 end
 
 function add_gene(experiment::Experiment, data::Dict{String, Any})
-	display(data)
 	if !haskey(data, "gene_id")
 		throw(ArgumentError("You need to provide a gene id."))
 	end
@@ -113,7 +112,14 @@ end
 
 get_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false) = get!(experiment.proteins, hgnc_id, Protein(hgnc_id, fully_validated))
 
-
+function add_protein(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "hgnc_id")
+		throw(ArgumentError("You need to provide a protein HGNC_ID."))
+	end
+	protein_id = data["hgnc_id"]
+	ab_validated = get(entry, "antibody_validated", false)
+	get_protein(experiment, hgnc_id, fully_validated=ab_validated)
+end
 
 ######### DATA VIEWS ###########
 # add a data view to the cell line
