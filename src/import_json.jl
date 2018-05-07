@@ -2,6 +2,7 @@
 Creates a Cell line object from JSON. Creates Gene (or Protein) objects on the fly as needed.
 """
 function import_cell_line(experiment::Experiment, data::Dict{String, Any})
+	info("fetching/creating cell line...")
 	cl = get_cell_line(experiment, data)
 	if haskey(data, "views")
 		# construct the views
@@ -22,12 +23,12 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 			catch KeyError
 				data_view = DataView{key_type, view_type}(cl.id)
 			end
+			info("populating data view with key type '$key_type' and view type '$view_type'")
 			populate_data_view!(experiment, data_view, v)
-			println("passing arguments of type $(typeof(cl)) with $(typeof(cl.views)) and $(data_view)")
+			info("adding data view to cell line")
 			add_dataview!(cl, data_view)
-			println("added data view...")
+			info("adding view type to experiment")
 			add_view!(experiment, view_type)
-			println("added view type to experiment")
 		end
 
 	end
@@ -36,9 +37,10 @@ end
 
 
 """
+Populates a data view with ExomeSeq data from JSON data.
 If no protein change is provided, we assume the empty string.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{K,V}, data::Vector{Any}) where {K <: Tuple{Gene, String}, V <: ExomeSeq}
+function populate_data_view!(experiment::Experiment, d::DataView{Tuple{Gene, String},ExomeSeq}, data::Vector{Any})
 	for entry in data
 		gene = add_gene(experiment, entry)
 
@@ -81,6 +83,77 @@ function populate_data_view!(experiment::Experiment, d::DataView{K,V}, data::Vec
 								tumor_zygosity=tumor_zygosity, tumor_reference_count=tumor_reference_count, tumor_variant_count=tumor_variant_count,
 								details=details)
 		add_measurement!(d, key, exome_data)
+	end
+end
 
+"""
+Populates a data view with Methylation data from JSON.
+"""
+function populate_data_view!(experiment::Experiment, d::DataView{Gene, Methylation}, data::Vector{Any})
+	for entry in data
+		gene = add_gene(experiment, entry)
+
+		cgct1_value = entry["cgct1"]
+		cct1_value = entry["cct1"]
+		beta_value = entry["illumina_beta_value"]
+
+		#optionals
+
+		methylated_threshold = get(entry, "methylated_threshold", .2)
+		illumina_id = get(entry, "illumina_id", "")
+
+		methylation_data = Methylation(beta_value, cgct1_value, cct1_value, methylated_threshold, illumina_id=illumina_id)
+		add_measurement(d, gene, methylation_data)
+	end
+end
+
+"""
+Populate a data view with gene expression data from JSON.
+"""
+function populate_data_view!(experiment::Experiment, d::DataView{Gene, GeneExpression}, data::Vector{Any})
+	for entry in data
+		gene = add_gene(experiment, entry)
+
+		expression_value = entry["expression_value"]
+
+		add_measurement(d, gene, GeneExpression(expression_value))
+	end
+end
+
+"""
+Populate a data view with RNASeq data from JSON.
+"""
+function populate_data_view!(experiment::Experiment, d::DataView{Gene, RNASeq}, data::Vector{Any})
+	for entry in data
+		gene = add_gene(experiment, entry)
+
+		expression_value = entry["expression_value"]
+		expression_status = entry["expression_status"]
+
+		add_measurement(d, gene, RNASeq(expression_value, expression_status))
+	end
+end
+
+"""
+Populate a data view with RPPA data from JSON.
+"""
+function populate_data_view!(experiment::Experiment, d::DataView{Protein, RPPA}, data::Vector{Any})
+	for entry in data
+		protein = add_protein(experiment, entry)
+
+		abundance = entry["protein_abundance"]
+
+		add_measurement(d, protein, RPPA(abundance))
+	end
+end
+
+"""
+Populate a data view with CNV data form JSON.
+"""
+function populate_data_view!(experiment::Experiment, d::DataView{Gene, CNV}, data::Vector{Any})
+	for entry in data
+		gene = add_gene(experiment, data)
+		cnv_value = entry["gene_level_cnv"]
+		add_measurement(d, gene, CNV(cnv_value))
 	end
 end

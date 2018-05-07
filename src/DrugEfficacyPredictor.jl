@@ -8,6 +8,8 @@ include("webservice.jl")
 
 include("import_json.jl")
 
+info(message::String) = Base.info("[$(now())] $message")
+error(message::String) = Base.error("[$(now())] $message")
 
 function initialize_probability_model(experiment::Experiment)
 	# set counting variables

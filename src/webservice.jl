@@ -16,17 +16,8 @@ http = HttpHandler() do req::Request, res::Response
 end
 
 function handle_request(req::Request)
-	display(req)
 	func = eval(parse(replace(req.resource, "/", "DrugEfficacyPredictor.", 1)))
-	display(req.data)
-
-	println("test before")
-	transcode(String, req.data)
-	println("test after")
-	JSON.parse(transcode(String, req.data))
-	println("test after after")
     request_dictionary = JSON.parse(transcode(String, req.data))
-    display(transcode(String, req.data))
     if endswith(req.resource, "create_experiment")	    
     	experiment = func()
     	exp_id = string(Base.Random.uuid4())
@@ -39,11 +30,12 @@ function handle_request(req::Request)
     experiment = experiments_dictionary[exp_id]
     try
     	func(experiment, request_dictionary)
+    	info("Request handled sucessfully, returning experiment $exp_id")
 		return JSON.json(Dict("status" => "success", "experiment_id" => exp_id))
     catch e
-		return JSON.json(Dict("status" => "exception", "type" => typeof(e), "stacktrace" => map(string, stacktrace(catch_backtrace()))))
-	finally
-    	rethrow()
+    	st = map(string, stacktrace(catch_backtrace()))
+    	# error(string(e))
+		return JSON.json(Dict("status" => "exception", "type" => string(e), "stacktrace" => st))
 	end
 end
 
