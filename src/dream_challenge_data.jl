@@ -98,14 +98,14 @@ function import_dream_challenge_data(directory::String)
 	experiment
 end
 
-get_cell_line_names_from_data_frame(::Type{T}, df::DataFrame) where T<:ExomeSeq = map(string, map(v->v.value, unique(df[:CellLine])))
-get_cell_line_names_from_data_frame(::Type{T}, df::DataFrame) where T<:GeneExpression = extract_column_names(df, 2)
-get_cell_line_names_from_data_frame(::Type{T}, df::DataFrame) where T<:Methylation = extract_column_names(df, 5)
-get_cell_line_names_from_data_frame(::Type{T}, df::DataFrame) where T<:Union{RNASeq, RPPA, CNV} = extract_column_names(df, 3)
+get_cell_line_names_from_data_frame(::Type{ExomeSeq}, df::DataFrame) = map(string, map(v->v.value, unique(df[:CellLine])))
+get_cell_line_names_from_data_frame(::Type{GeneExpression}, df::DataFrame) = extract_column_names(df, 2)
+get_cell_line_names_from_data_frame(::Type{Methylation}, df::DataFrame) = extract_column_names(df, 5)
+get_cell_line_names_from_data_frame(::Type{Union{RNASeq, RPPA, CNV}}, df::DataFrame) = extract_column_names(df, 3)
 
 extract_column_names(df::DataFrame, first_used_column::Int64) = map(string, names(df)[first_used_column:end])
 
-function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment::Experiment) where {K <: Tuple{Gene, String}, T<:ExomeSeq}
+function populate_data_view!(data_view::DataView{Tuple{Gene, String},ExomeSeq}, df::DataFrame, experiment::Experiment)
 	cl_df = view(df, df[:CellLine] .== data_view.cell_line_id)
 	for data_row in eachrow(cl_df)
 		gene = get_gene(experiment, data_row[:HGNC_ID].value)
@@ -152,7 +152,7 @@ function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment
 	end
 end
 
-function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment::Experiment) where {K <: Gene, T <: GeneExpression}
+function populate_data_view!(data_view::DataView{Gene,GeneExpression}, df::DataFrame, experiment::Experiment)
 	cl_df = df[[:HGNC_ID, Symbol(data_view.cell_line_id)]]
 	for data_row in eachrow(cl_df)
 		if !data_row[2].hasvalue continue end
@@ -162,7 +162,7 @@ function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment
 	end
 end
 
-function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment::Experiment) where {K <: Gene, T <: Methylation}
+function populate_data_view!(data_view::DataView{Gene,Methylation}, df::DataFrame, experiment::Experiment)
 	cl_df = df[[:HGNC_ID, Symbol(data_view.cell_line_id), :CGct1, :Cct1, :Illumina_ID]]
 	for data_row in eachrow(cl_df)
 		gene = get_gene(experiment, data_row[1].value)
@@ -171,7 +171,7 @@ function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment
 	end
 end
 
-function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment::Experiment) where {K <: Gene, T <: RNASeq}
+function populate_data_view!(data_view::DataView{Gene,RNASeq}, df::DataFrame, experiment::Experiment)
 	tic()
 	cl_df = df[[:HGNC_ID, Symbol(data_view.cell_line_id)]]
 	for data_row in eachrow(cl_df)
@@ -195,7 +195,7 @@ function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment
 	info("cell line $(data_view.cell_line_id) took $(toq()) seconds")
 end
 
-function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment::Experiment) where {K <: Protein, T <: RPPA}
+function populate_data_view!(data_view::DataView{Protein,RPPA}, df::DataFrame, experiment::Experiment)
 	cl_df = df[[:Antibody_ID, Symbol(data_view.cell_line_id)]]
 	for data_row in eachrow(cl_df)
 		rppa = RPPA(data_row[2].value)
@@ -204,7 +204,7 @@ function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment
 	end
 end
 
-function populate_data_view!(data_view::DataView{K,T}, df::DataFrame, experiment::Experiment) where {K <: Gene, T <: CNV}
+function populate_data_view!(data_view::DataView{Gene,CNV}, df::DataFrame, experiment::Experiment)
 	cl_df = df[[:HGNC_ID, Symbol(data_view.cell_line_id)]]
 	for data_row in eachrow(cl_df)
 		if !data_row[2].hasvalue continue end
