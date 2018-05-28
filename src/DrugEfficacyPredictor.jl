@@ -8,9 +8,17 @@ include("webservice.jl")
 
 include("import_json.jl")
 
-info(message::String) = Base.info("[$(now())] $message")
-error(message::String) = Base.error("[$(now())] $message")
 
+"""
+Adjust info and error functions to include time stamp.
+"""
+info(message::String) = Base.info("\t[$(now())] $message")
+error(message::String) = Base.error("\t[$(now())] $message")
+warn(message::String) = Base.warn("[$(now())] $message")
+
+"""
+Initialization of the probability model.
+"""
 function initialize_probability_model(experiment::Experiment)
 	# set counting variables
 	T = length(experiment.results)
