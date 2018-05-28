@@ -10,7 +10,7 @@
 				"gene_id" : 12345,
 				"cgct1" : 1,
 				"cct1" : 2,
-				"beta_value" : 0.25,
+				"illumina_beta_value" : 0.25,
 				"is_methylated" : true,
 				"illumina_id" : "blabla_id"
 			}
