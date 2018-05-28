@@ -16,6 +16,7 @@ mutable struct GammaParameter <: ModelParameter
 		gp.variational_a = a
 		gp.variational_b = b
 		gp.expectation_trace = Float64[]
+		gp
 	end
 end
 
