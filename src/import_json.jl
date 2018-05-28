@@ -17,16 +17,9 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 			else
 				key_type = Gene
 			end
-			data_view = nothing
-			try
-				data_view = get_dataview(cl_obj, view_type)
-			catch KeyError
-				data_view = DataView{key_type, view_type}(cl.id)
-			end
+			data_view = get_dataview!(cl_obj, view_type, DataView{key_type, view_type}(cl.id))
 			info("populating data view with key type '$key_type' and view type '$view_type'")
 			populate_data_view!(experiment, data_view, v)
-			info("adding data view to cell line")
-			add_dataview!(cl, data_view)
 			info("adding view type to experiment")
 			add_view!(experiment, view_type)
 		end
@@ -40,7 +33,7 @@ end
 Populates a data view with ExomeSeq data from JSON data.
 If no protein change is provided, we assume the empty string.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Tuple{Gene, String},ExomeSeq}, data::Vector{Any})
+function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq}, data::Vector{Any})
 	for entry in data
 		gene = add_gene(experiment, entry)
 
@@ -74,7 +67,6 @@ function populate_data_view!(experiment::Experiment, d::DataView{Tuple{Gene, Str
 		tumor_variant_count = get(entry, "tumor_variant_count", 0)
 		details = get(entry, "details", "")
 
-		key = (gene, protein_change)
 		exome_data = ExomeSeq(reference_mismatch_sum, reference_mismatch_avg, reference_dist3effective_avg,
 								variant_mismatch_sum, variant_mismatch_avg, variant_dist3effective_avg,
 								num_cosmic=num_cosmic, variant_effect=variant_effect, protein_change=protein_change,
@@ -82,7 +74,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Tuple{Gene, Str
 								norm_zygosity=norm_zygosity, norm_reference_count=norm_reference_count, norm_variant_count=norm_variant_count,
 								tumor_zygosity=tumor_zygosity, tumor_reference_count=tumor_reference_count, tumor_variant_count=tumor_variant_count,
 								details=details)
-		add_measurement!(d, key, exome_data)
+		add_measurement!(d, gene, exome_data)
 	end
 end
 
@@ -103,7 +95,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, Methylati
 		illumina_id = get(entry, "illumina_id", "")
 
 		methylation_data = Methylation(beta_value, cgct1_value, cct1_value, methylated_threshold, illumina_id=illumina_id)
-		add_measurement(d, gene, methylation_data)
+		add_measurement!(d, gene, methylation_data)
 	end
 end
 
@@ -116,7 +108,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, GeneExpre
 
 		expression_value = entry["expression_value"]
 
-		add_measurement(d, gene, GeneExpression(expression_value))
+		add_measurement!(d, gene, GeneExpression(expression_value))
 	end
 end
 
@@ -130,7 +122,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, RNASeq}, 
 		expression_value = entry["expression_value"]
 		expression_status = entry["expression_status"]
 
-		add_measurement(d, gene, RNASeq(expression_value, expression_status))
+		add_measurement!(d, gene, RNASeq(expression_value, expression_status))
 	end
 end
 
@@ -143,7 +135,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Protein, RPPA},
 
 		abundance = entry["protein_abundance"]
 
-		add_measurement(d, protein, RPPA(abundance))
+		add_measurement!(d, protein, RPPA(abundance))
 	end
 end
 
@@ -154,6 +146,6 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, CNV}, dat
 	for entry in data
 		gene = add_gene(experiment, data)
 		cnv_value = entry["gene_level_cnv"]
-		add_measurement(d, gene, CNV(cnv_value))
+		add_measurement!(d, gene, CNV(cnv_value))
 	end
 end
