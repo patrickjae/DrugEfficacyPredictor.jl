@@ -55,10 +55,11 @@ mutable struct PredictionModel
 		p.a = Vector{Vector{NormalParameter}}(T)
 		for t in 1:T
 			p.λ[t] = VectorGammaParameter(N[t])
-			p.a[t] = MvNormalParameter(m_0, s_0, N[t])
+			# p.a[t] = MvNormalParameter(m_0, s_0, N[t])
+			p.a[t] = Vector{NormalParameter}(N[t])
 			for n in 1:N[t]
 				p.λ[t][n] = GammaParameter(a_0, b_0)
-				# p.a[t][n] = NormalParameter(m_0, s_0)
+				p.a[t][n] = NormalParameter(m_0, s_0)
 			end
 		end
 
@@ -78,6 +79,7 @@ mutable struct PredictionModel
 			p.⍵[k] = GammaParameter(a_0, b_0)
 			p.e[k] = NormalParameter(m_0, s_0)
 		end
+		p
 	end
 end
 
@@ -92,32 +94,9 @@ abstract type Sample end
 
 abstract type ViewType end
 
-"""
-A data view, typed with a identifier and data type.
-The identifier is mostly of type Gene, for RPPA data it is Protein.
-In general, similarity matrices for samples are computed on the basis of
-these identifiers. In other words, for each data view, a cell line is represented
-as a vector of genes (or proteins) with associated values. The identifiers determine
-the ordering of this vector.
-"""
+abstract type SingleViewType <: ViewType end
 
-struct DataView{K, V <: ViewType}
-	cell_line_id::String
-	measurements::OrderedDict{K, V}
-	DataView{K,V}(cell_line_id::String) where {K,V} = new(cell_line_id, OrderedDict{K,V}())
-end
-
-""" 
-A cell line comprised with its ID, information on the cancer type and 
-dictionary of views, i.e. different data collected for this cell line.
-"""
-struct CellLine <: Sample
-	id::String
-	cancer_type::String
-	views::OrderedDict{Type{<:ViewType}, DataView}
-	CellLine(id::String, cancer_type::String="unknown") = new(id, cancer_type, OrderedDict{Type{<:ViewType}, DataView}())
-end
-
+abstract type VectorViewType <: ViewType end
 
 """ 
 A gene. Mostly represented by its HGNC ID in the motivating Dreamchallenge data set.
@@ -152,8 +131,21 @@ struct Protein
 	antibody_validated::Bool
 end
 
+import Base.isless
+function isless(x::Gene, y::Gene)
+	if isless(x.entrez_id, y.entrez_id) return true
+	elseif x.entrez_id == y.entrez_id && (isless(x.ensembl_id, y.ensembl_id) || isless(x.hgnc_id, y.hgnc_id)) return true
+	else return false end
+end
+isless(x::Protein, y::Protein) = isless(x.hgnc_id, y.hgnc_id)
+
+""" The types allowed as keys in data views """
+const KeyType = Union{Gene, Protein}
+
+
+
 """ A gene expression."""
-struct GeneExpression <: ViewType
+mutable struct GeneExpression <: SingleViewType
 	expression_value::Float64
 	normalized_value::Float64
 	GeneExpression(expression_value::Float64) = new(expression_value, expression_value)
@@ -177,7 +169,7 @@ values. Probes are often filtered out that have fewer than 3
 cytosines.
 """
 
-struct Methylation <: ViewType
+mutable struct Methylation <: SingleViewType
 	cgct1::Int64
 	cct1::Int64
 	illumina_beta_value::Float64
@@ -195,7 +187,7 @@ Expression value is a fpkm value.
 expression_status is 1 if the Ensembl gene model was detected above 
 the background noise level.
 """
-struct RNASeq <: ViewType
+mutable struct RNASeq <: SingleViewType
 	expression_value::Float64
 	normalized_value::Float64
 	expression_status::Bool
@@ -227,7 +219,7 @@ reference_dist3effective_avg - METRIC: Average normalized distance of reference 
 variant_dist3effective_avg - METRIC: Average normalized distance of variant bases from 3' end of their respective reads
 details - Various other information collected at this position. 
 """
-struct ExomeSeq <: ViewType
+mutable struct ExomeSeq <: VectorViewType
 	num_cosmic::Int64
 	variant_effect::String
 	protein_change::String
@@ -263,15 +255,16 @@ struct ExomeSeq <: ViewType
 	end
 end
 
+
 """ Protein abundance value. """
-struct RPPA <: ViewType
+mutable struct RPPA <: SingleViewType
 	protein_abundance::Float64
 	normalized_value::Float64
 	RPPA(protein_abundance::Float64) = new(protein_abundance, protein_abundance)
 end
 
 """ The quantified value for DNA copy number analysis (aggregated across whole genes) """
-struct CNV <: ViewType
+mutable struct CNV <: SingleViewType
 	gene_level_cnv::Float64
 	normalized_value::Float64
 	CNV(gene_level_cnv::Float64) = new(gene_level_cnv, gene_level_cnv)
@@ -296,6 +289,35 @@ mutable struct Drug
 end
 
 """
+A data view, typed with a identifier and data type.
+The identifier is mostly of type Gene, for RPPA data it is Protein.
+In general, similarity matrices for samples are computed on the basis of
+these identifiers. In other words, for each data view, a cell line is represented
+as a vector of genes (or proteins) with associated values. The identifiers determine
+the ordering of this vector.
+"""
+struct DataView{K <: KeyType, V <: ViewType}
+	cell_line_id::String
+	key_type::Type{K}
+	used_keys::Set{K}
+	measurements::Union{Dict{K, V}, MultiDict{K, V}}
+	DataView{K,V}(cell_line_id::String) where {K,V <: SingleViewType} = new(cell_line_id, K, Set{K}(), Dict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K,V <: VectorViewType} = new(cell_line_id, K, Set{K}(), MultiDict{K,V}())
+end
+
+
+""" 
+A cell line comprised with its ID, information on the cancer type and 
+dictionary of views, i.e. different data collected for this cell line.
+"""
+struct CellLine <: Sample
+	id::String
+	cancer_type::String
+	views::Dict{Type{<:ViewType}, DataView{<:KeyType, <:ViewType}}
+	CellLine(id::String, cancer_type::String="unknown") = new(id, cancer_type, Dict{Type{<:ViewType}, DataView{<:KeyType, <:ViewType}}())
+end
+
+"""
 An experimental outcome.
 An outcome should be associated with a drug.
 The dictionary of outcome values associates the results to cell lines. 
@@ -304,28 +326,40 @@ cell lines is correlated according to the molecular structure of the cell line t
 In other words, we model the outcome on available cell lines jointly.
 """
 mutable struct Outcome
-	outcome_values::OrderedDict{CellLine, Float64}
+	outcome_values::Dict{CellLine, Float64}
 	outcome_type::String
-	normalized_outcome_values::OrderedDict{CellLine, Float64}
+	normalized_outcome_values::Dict{CellLine, Float64}
 	outcome_mean::Float64
 	outcome_std::Float64
-	Outcome(outcome_type::String) = new(OrderedDict{CellLine, Float64}(), outcome_type, OrderedDict{CellLine, Float64}(), .0, 1.)
+	Outcome(outcome_type::String) = new(Dict{CellLine, Float64}(), outcome_type, Dict{CellLine, Float64}(), .0, 1.)
 end
 
 """ 
 An experiment comprised of measurements (where each is associated 
 with a cell line) and results.
 """
-struct Experiment
-	results::OrderedDict{Drug, Outcome}
-	cell_lines::OrderedDict{String, CellLine}
-	genes::OrderedDict{Int64, Gene}
-	genes_by_hgnc::OrderedDict{String, Gene}
-	genes_by_ensembl::OrderedDict{String, Gene}
-	proteins::OrderedDict{String, Protein}
+mutable struct Experiment
+	results::Dict{Drug, Outcome}
+	cell_lines::Dict{String, CellLine}
+	genes::Dict{Int64, Gene}
+	genes_by_hgnc::Dict{String, Gene}
+	genes_by_ensembl::Dict{String, Gene}
+	proteins::Dict{String, Protein}
 	views::OrderedSet{Type{<:ViewType}}
+	statistics::Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}
+	is_normalized::Bool
 	function Experiment()
-		new(OrderedDict{Drug, Outcome}(), OrderedDict{String, CellLine}(), OrderedDict{Int64, Gene}(), OrderedDict{String, Gene}(), OrderedDict{String, Gene}(), OrderedDict{String, Protein}(), OrderedSet{Type{<:ViewType}}())
+		new(
+			Dict{Drug, Outcome}(), # results
+			Dict{String, CellLine}(), # cell_lines
+			Dict{Int64, Gene}(), # genes
+			Dict{String, Gene}(), # genes by hgnc
+			Dict{String, Gene}(), # genes by ensembl
+			Dict{String, Protein}(), # proteins
+			OrderedSet{Type{<:ViewType}}(), # views
+			Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}(), # statistics
+			false # is normalized
+			)
 	end
 end
 
@@ -341,5 +375,5 @@ struct DrugEfficacyPrediction
 	targets::OrderedDict{Drug, Vector{Float64}}
 	continuous_kernel::Function
 	discrete_kernel::Function
-	DrugEfficacyPrediction(experiment::Experiment, model::PredictionModel) = new(experiment, model, Dict{Drug, Vector{Matrix{Float64}}}(), OrderedDict{Drug, Vector{Float64}}())
+	DrugEfficacyPrediction(experiment::Experiment, model::PredictionModel) = new(experiment, model, OrderedDict{Drug, Vector{Matrix{Float64}}}(), OrderedDict{Drug, Vector{Float64}}())
 end
