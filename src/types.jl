@@ -13,7 +13,8 @@ mutable struct PredictionModel
 	# λ::Vector{IsometricPrecisionParameter} #precision to a <-- introduce covariance between cell lines
 	λ::Vector{Vector{GammaParameter}}
 	# drug specific vectors, TxN_t dimensional
-	a::Vector{Vector{NormalParameter}}
+	# a::Vector{Vector{NormalParameter}}
+	a::Vector{MvNormalParameter}
 
 	# ε::IsometricPrecisionParameter #precision to y <-- between drugs
 	ε::Vector{GammaParameter}
@@ -52,14 +53,15 @@ mutable struct PredictionModel
 		end
 
 		p.λ = Vector{VectorGammaParameter}(T)
-		p.a = Vector{Vector{NormalParameter}}(T)
+		# p.a = Vector{Vector{NormalParameter}}(T)
+		p.a = Vector{MvNormalParameter}(T)
 		for t in 1:T
 			p.λ[t] = VectorGammaParameter(N[t])
-			# p.a[t] = MvNormalParameter(m_0, s_0, N[t])
-			p.a[t] = Vector{NormalParameter}(N[t])
+			p.a[t] = MvNormalParameter(m_0, s_0, N[t])
+			# p.a[t] = Vector{NormalParameter}(N[t])
 			for n in 1:N[t]
 				p.λ[t][n] = GammaParameter(a_0, b_0)
-				p.a[t][n] = NormalParameter(m_0, s_0)
+				# p.a[t][n] = NormalParameter(m_0, s_0)
 			end
 		end
 
@@ -142,8 +144,6 @@ isless(x::Protein, y::Protein) = isless(x.hgnc_id, y.hgnc_id)
 """ The types allowed as keys in data views """
 const KeyType = Union{Gene, Protein}
 
-
-
 """ A gene expression."""
 mutable struct GeneExpression <: SingleViewType
 	expression_value::Float64
@@ -196,7 +196,7 @@ end
 
 
 """
-Whole exome sequencing data.
+Whole exome sequencing data. This is a vector view type because we may have multiple measurements for a single Gene key.
 
 The different parts are:
 
@@ -273,7 +273,7 @@ end
 """ 
 A drug, identified by a name.
 Additional information may include knowledge about affected genes to
-refine the number of features for predictions.
+refine the number of features for predictions, this is useful for incorporating pathway information.
 One useful approach could be to look at the generic pathways and select only those 
 that are in a known pathway.
 More specific would be to select only genes of the pathway that is affected by a drug.
@@ -326,12 +326,12 @@ cell lines is correlated according to the molecular structure of the cell line t
 In other words, we model the outcome on available cell lines jointly.
 """
 mutable struct Outcome
-	outcome_values::Dict{CellLine, Float64}
+	outcome_values::OrderedDict{CellLine, Float64}
 	outcome_type::String
-	normalized_outcome_values::Dict{CellLine, Float64}
+	normalized_outcome_values::OrderedDict{CellLine, Float64}
 	outcome_mean::Float64
 	outcome_std::Float64
-	Outcome(outcome_type::String) = new(Dict{CellLine, Float64}(), outcome_type, Dict{CellLine, Float64}(), .0, 1.)
+	Outcome(outcome_type::String) = new(OrderedDict{CellLine, Float64}(), outcome_type, OrderedDict{CellLine, Float64}(), .0, 1.)
 end
 
 """ 
@@ -339,8 +339,8 @@ An experiment comprised of measurements (where each is associated
 with a cell line) and results.
 """
 mutable struct Experiment
-	results::Dict{Drug, Outcome}
-	cell_lines::Dict{String, CellLine}
+	results::OrderedDict{Drug, Outcome}
+	cell_lines::OrderedDict{String, CellLine}
 	genes::Dict{Int64, Gene}
 	genes_by_hgnc::Dict{String, Gene}
 	genes_by_ensembl::Dict{String, Gene}
@@ -350,8 +350,8 @@ mutable struct Experiment
 	is_normalized::Bool
 	function Experiment()
 		new(
-			Dict{Drug, Outcome}(), # results
-			Dict{String, CellLine}(), # cell_lines
+			OrderedDict{Drug, Outcome}(), # results
+			OrderedDict{String, CellLine}(), # cell_lines
 			Dict{Int64, Gene}(), # genes
 			Dict{String, Gene}(), # genes by hgnc
 			Dict{String, Gene}(), # genes by ensembl
