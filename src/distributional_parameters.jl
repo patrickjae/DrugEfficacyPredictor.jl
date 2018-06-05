@@ -29,7 +29,7 @@ mutable struct NormalParameter <: ModelParameter
 	variational_mean::Float64
 	variational_variance::Float64
 
-	mean_trace::Vector{Float64}
+	expectation_trace::Vector{Float64}
 
 	function NormalParameter(m_0::Float64, s_0::Float64)
 		np = new()
@@ -48,7 +48,7 @@ mutable struct MvNormalParameter <: ModelParameter
 	variational_mean::Vector{Float64}
 	variational_covariance::Matrix{Float64}
 
-	mean_trace::Matrix{Float64}
+	expectation_trace::Matrix{Float64}
 	function MvNormalParameter(m_0::Float64, s_0::T, D::Int64) where {T<:Union{Float64, Vector{Float64}}}
 		np = new()
 		np.prior_mean = m_0.*ones(D)
@@ -87,5 +87,6 @@ end
 
 function compute_elbo(p_dist::Distributions.Distribution, q_dist::Distributions.Distribution, param::ModelParameter)
 	expected_param = expected_value(param)
+	# TODO: keep track of expectation traces, maybe store them here, as elbo function is called only once per update
 	Distributions.logpdf(p_dist, expected_param) - Distributions.logpdf(q_dist, expected_param)
 end
