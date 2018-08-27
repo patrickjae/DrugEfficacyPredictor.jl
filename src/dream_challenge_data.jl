@@ -1,6 +1,7 @@
 function import_dream_challenge_data(directory::String)
 	info("importing dream challenge data from $directory")
 	experiment = create_experiment()
+	experiments_dictionary["dream_challenge"] = experiment
 	for f in readdir(directory)
 		if !endswith(f,".txt") || endswith(f, "README.txt")
 			continue
@@ -14,14 +15,16 @@ function import_dream_challenge_data(directory::String)
 			data_type = GeneExpression
 		elseif data_type_string == "Methylation"
 			data_type = Methylation
-		elseif data_type_string == "RNAseq_expressed_calls" || data_type_string == "RNAseq_quantification"
+		elseif data_type_string == "RNAseq_expressed_calls"
+			data_type = RNASeqCall			
+		elseif data_type_string == "RNAseq_quantification"
 			data_type = RNASeq
 		elseif data_type_string == "RPPA"
 			key_type = Protein
 			data_type = RPPA
 		elseif data_type_string == "SNP6_gene_level"
 			data_type = CNV
-		elseif data_type_string == "Drug_Response_Training"
+		elseif data_type_string == "Drug_Response_Training" || data_type_string == "test_data"
 			# responses
 		else
 			warn("couldn't determine data type: $data_type_string")
@@ -35,7 +38,7 @@ function import_dream_challenge_data(directory::String)
 		end
 		info("creating genes or proteins...")
 		info("number of genes so far: Entrez: $(length(experiment.genes)), HGNC: $(length(experiment.genes_by_hgnc)), Ensembl: $(length(experiment.genes_by_ensembl))")
-		if data_type_string == "Drug_Response_Training"
+		if data_type_string == "Drug_Response_Training" || data_type_string == "test_data"
 			drugs = names(df)[2:end]
 			cell_lines = df[:CellLine].values
 			cl_objects = map(cl_id -> get_cell_line(experiment, cl_id, "Breast cancer"), cell_lines)
@@ -43,8 +46,16 @@ function import_dream_challenge_data(directory::String)
 				vals = df[d].values
 				o = Outcome("IC50")
 				add_results!(o, cl_objects[.!df[d].isnull], vals[.!df[d].isnull])
-				add_outcome!(experiment, Drug(string(d)), o)
+				drug = get!(experiment.drugs, string(d), Drug(string(d)))
+				if data_type_string == "Drug_Response_Training"
+					add_outcome!(experiment, drug, o)
+				else
+					add_test_outcome!(experiment, drug, o)
+				end
 			end
+			continue
+		elseif data_type_string == "test_data"
+			drugs
 			continue
 		elseif data_type_string == "RPPA"
 			i = 1
@@ -167,12 +178,12 @@ function import_dream_challenge_data(directory::String)
 	experiment
 end
 
-get_cell_line_names_from_data_frame(::Type{ExomeSeq}, df::DataFrame) = map(string, map(v->v.value, unique(df[:CellLine])))
+get_cell_line_names_from_data_frame(::Type{ExomeSeq}, df::DataFrame) = map(string, map(v->uppercase(v.value), unique(df[:CellLine])))
 get_cell_line_names_from_data_frame(::Type{GeneExpression}, df::DataFrame) = extract_column_names(df, 2)
 get_cell_line_names_from_data_frame(::Type{Methylation}, df::DataFrame) = extract_column_names(df, 5)
-get_cell_line_names_from_data_frame(::Type{<:Union{RNASeq, RPPA, CNV}}, df::DataFrame) = extract_column_names(df, 3)
+get_cell_line_names_from_data_frame(::Type{<:Union{RNASeq, RNASeqCall, RPPA, CNV}}, df::DataFrame) = extract_column_names(df, 3)
 
-extract_column_names(df::DataFrame, first_used_column::Int64) = map(string, names(df)[first_used_column:end])
+extract_column_names(df::DataFrame, first_used_column::Int64) = map(uppercase, map(string, names(df)[first_used_column:end]))
 
 function populate_data_view!(data_view::DataView{Gene,ExomeSeq}, df::DataFrame, experiment::Experiment)
 	cl_df = view(df, df[:CellLine].values .== data_view.cell_line_id)
@@ -209,10 +220,10 @@ function populate_data_view!(data_view::DataView{Gene,ExomeSeq}, df::DataFrame, 
 		# 		reference_mismatch_sum, variant_mismatch_sum,
 		# 		reference_dist3effective_avg, variant_dist3effective_avg,
 		# 		details, data_summary)
-		exome_data = ExomeSeq(reference_mismatch_sum, reference_mismatch_avg, reference_dist3effective_avg,
-								variant_mismatch_sum, variant_mismatch_avg, variant_dist3effective_avg,
-								num_cosmic=num_cosmic, variant_effect=variant_effect, protein_change=protein_change,
-								nucleotid_change=nucleotid_change, variant_confidence=variant_confidence,
+		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg, 
+								reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum, 
+								variant_mismatch_avg=variant_mismatch_avg, variant_dist3effective_avg=variant_dist3effective_avg,
+								num_cosmic=num_cosmic, variant_effect=variant_effect, nucleotid_change=nucleotid_change, variant_confidence=variant_confidence,
 								norm_zygosity=norm_zygosity, norm_reference_count=norm_reference_count, norm_variant_count=norm_variant_count,
 								tumor_zygosity=tumor_zygosity, tumor_reference_count=tumor_reference_count, tumor_variant_count=tumor_variant_count,
 								details=details)
@@ -243,15 +254,16 @@ function populate_data_view!(data_view::DataView{Gene,RNASeq}, df::DataFrame, ex
 	cl_df = df[[:Ensembl_ID, Symbol(data_view.cell_line_id)]]
 	for data_row in eachrow(cl_df)
 		gene = get_gene(experiment, data_row[1].value, "ensembl_id")
-		is_quant = eltype(data_row[2].value) == Float64 ? false : true
-		empty_measurement = RNASeq(0.0, false)
-		# this will return the existing measurment for the gene and spit out a warn message
-		measurement = get_measurement!(data_view, gene, empty_measurement)
-		if is_quant
-			measurement.expression_status = Bool(data_row[2].value)
-		else
-			measurement.expression_value = data_row[2].value
-		end
+		add_measurement!(data_view, gene, RNASeq(data_row[2].value))
+	end
+end
+
+function populate_data_view!(data_view::DataView{Gene,RNASeqCall}, df::DataFrame, experiment::Experiment)
+	cl_df = df[[:Ensembl_ID, Symbol(data_view.cell_line_id)]]
+	for data_row in eachrow(cl_df)
+		gene = get_gene(experiment, data_row[1].value, "ensembl_id")
+		value = Bool(data_row[2].value)
+		add_measurement!(data_view, gene, RNASeqCall(value))
 	end
 end
 
