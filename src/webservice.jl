@@ -17,8 +17,12 @@ function create_http_handler()
 end
 
 function handle_request(req::Request)
+    if endswith(req.resource, "stop")
+        close(server)
+        return JSON.json(Dict("status" => "success", "message" => "Server has been shut down."))
+    end
+
 	func = eval(parse(replace(req.resource, "/", "DrugEfficacyPredictor.", 1)))
-    request_dictionary = JSON.parse(transcode(String, req.data))
     # if request wants to create an experiment return the id of the newly created object
     if endswith(req.resource, "create_experiment")
     	experiment = func()
@@ -27,10 +31,8 @@ function handle_request(req::Request)
 		return JSON.json(Dict("status" => "success", "experiment_id" => exp_id))
     end
 
-    if endswith(req.resource, "stop")
-    	close(server)
-    end
     # for all other requests, require the experiment id.
+    request_dictionary = JSON.parse(transcode(String, req.data))
     if !haskey(request_dictionary, "experiment_id")
     	return JSON.json(Dict("status" => "error", "message" => "Please provide an experiment_id."))
     end
@@ -39,22 +41,20 @@ function handle_request(req::Request)
     	return JSON.json(Dict("status" => "error", "message" => "Unknown experiment ID '$exp_id'."))
     end
     experiment = experiments_dictionary[exp_id]
-    try
+    # try
     	func(experiment, request_dictionary)
     	info("Request handled sucessfully, returning experiment $exp_id")
 		return JSON.json(Dict("status" => "success", "experiment_id" => exp_id))
-    catch e
-    	st = map(string, stacktrace(catch_backtrace()))
-    	# error("Exception occurred: $(typeof(e))")
-    	# error("Stacktrace:")
-    	# for st_entry in st
-    	# 	error(st)
-    	# end
-    	# error(string(e))
-		return JSON.json(Dict("status" => "exception", "type" => string(e), "stacktrace" => st))
-	finally
-		rethrow(e)	
-	end
+ #    catch ex
+ #    	st = map(string, stacktrace(catch_backtrace()))
+ #    	error("Exception occurred: $(typeof(ex))")
+ #    	error("Stacktrace:")
+ #    	for st_entry in st
+ #    		error(st)
+ #    	end
+ #    	error(string(e))
+	# 	return JSON.json(Dict("status" => "exception", "type" => string(ex), "stacktrace" => st))
+	# end
 end
 
 function start_server(port::Int64)
