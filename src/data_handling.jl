@@ -15,7 +15,6 @@ function get_cell_line(experiment::Experiment, data::Dict{String, Any})
 	get_cell_line(experiment, data["id"], data["cancer_type"])
 end
 
-
 ######### GENES ###########
 function add_gene(experiment::Experiment, gene::Gene) 
 	experiment.genes[gene.entrez_id] = gene
@@ -39,9 +38,13 @@ function add_gene(experiment::Experiment, data::Dict{String, Any})
 	if !haskey(data, "gene_id")
 		throw(ArgumentError("You need to provide a gene id."))
 	end
+	if data["gene_id"] == nothing
+		throw(ArgumentError("The provided gene id is null."))
+	end
 	gene_id = data["gene_id"]
 	id_type = get(data, "type_id", "entrez_id")
 	is_cancer_gene = get(data, "is_cancer_gene", false)
+	# info("gene_id: $gene_id, id_type: $id_type, cancer: $is_cancer_gene")
 	add_gene(experiment, gene_id, id_type, is_cancer_gene = is_cancer_gene)
 end
 
@@ -84,7 +87,36 @@ end
 
 get_gene(experiment::Experiment, gene_id::Int64, id_type::String="entrez_id") = experiment.genes[gene_id]
 
+######### PATHWAYS ###########
+function add_pathway(experiment::Experiment, genes::Vector{K}=Vector{Gene}(); id::String="", name::String="") where K<:KeyType
+	pw = Pathway{K}(genes, name = name, id = id)
+	push!(experiment.pathway_information, pw)
+	pw
+end
 
+function add_pathway(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "id") throw(ArgumentError("No ID provided for current pathway")) end
+	if !haskey(data, "name") throw(ArgumentError("No name provided for current pathway")) end
+	if !haskey(data, "genes") || !haskey(data, "type_id") throw(ArgumentError("You need to specify gene type id (entrez_id, hgnc_id, ensembl_id) and a list of genes for the pathway.")) end
+
+	id_type = data["type_id"]
+	genes = Vector{Gene}()
+	for g in data["genes"]
+		try
+			gene = get_gene(experiment, g, id_type)
+			push!(genes, gene)
+		catch KeyError
+			warn("no data for gene_id $g")
+		end
+	end
+	info(typeof(genes))
+	add_pathway(experiment, genes, name = string(data["name"]), id = string(data["id"]))
+end
+
+function add_gene_to_pathway(pw::Pathway{K}, gene::K) where {K<:KeyType}
+	push!(pw.genes, gene)
+	pw
+end
 ######### PROTEINS ###########
 function add_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false)
 	p_obj = Protein(hgnc_id, fully_validated)
@@ -109,8 +141,8 @@ add_view!(experiment::Experiment, view::Type{<:ViewType}) = union!(experiment.vi
 ######### DATA VIEWS ###########
 
 # get a data view for a certain data type from a cell line or create if not present
-get_dataview(cl::CellLine, data_type::Type) = cl.views[data_type]
-get_dataview!(cl::CellLine, data_type::Type, dv::DataView{<:KeyType, <:ViewType}) = get!(cl.views, data_type, dv)
+get_dataview(cl::CellLine, data_type::Type{<:ViewType}) = cl.views[data_type]
+get_dataview!(cl::CellLine, data_type::Type{<:ViewType}, dv::DataView{<:KeyType, <:ViewType}) = get!(cl.views, data_type, dv)
 
 ######### MEASUREMENTS ###########
 # add a measurement, i.e. a gene/protein data pair to a data view
@@ -163,7 +195,8 @@ get_measurement_value(d::CNV) = d.gene_level_cnv
 function normalize_data_views(experiment::Experiment)
 	#for each of the views
 	for v in experiment.views
-		# if v == ExomeSeq continue end
+		# Boolean vals need not be normalized
+		if v == RNASeqCall continue end
 		# reset the normalization statistics for this view
 		experiment.statistics[v] = OrderedDict{KeyType, Tuple{Float64, Float64}}()
 		# collect the keys in this view over all cell lines that it
@@ -175,7 +208,8 @@ function normalize_data_views(experiment::Experiment)
 			end
 		end
 		#iterate over all keys (i.e. genes/proteins/gene-protein change) and normalize across cell lines
-		for key in all_keys_in_view
+		for key_id in 1:length(all_keys_in_view)
+			key = all_keys_in_view[key_id]
 			#collect values
 			all_values = Float64[]
 			for cl in values(experiment.cell_lines)
@@ -187,6 +221,10 @@ function normalize_data_views(experiment::Experiment)
 			end
 			mean_val = mean(all_values)
 			std_val = stdm(all_values, mean_val)
+			if std_val == 0.
+				# warn("standard deviation is zero in view $v for key $key")
+				std_val += 1e-7
+			end
 			#iterate over values again and normalize 
 			for cl in values(experiment.cell_lines)
 				if haskey(cl.views,v)
@@ -236,5 +274,10 @@ end
 # add an outcome of a drug to the experiment
 function add_outcome!(e::Experiment, d::Drug, o::Outcome)
 	e.results[d] = o
+	e
+end
+
+function add_test_outcome!(e::Experiment, d::Drug, o::Outcome)
+	e.test_results[d] = o
 	e
 end

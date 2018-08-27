@@ -289,6 +289,18 @@ mutable struct Drug
 end
 
 """
+Pathway information.
+Pathway information is subsumed into a set of genes that affect the signaling pathway.
+"""
+struct Pathway{K<:KeyType}
+	id::String
+	name::String
+	genes::Vector{K}
+	Pathway{K}(genes::Vector{K}; name::String="", id::String="") where K = new(id, name, genes)
+end
+
+
+"""
 A data view, typed with a identifier and data type.
 The identifier is mostly of type Gene, for RPPA data it is Protein.
 In general, similarity matrices for samples are computed on the basis of
