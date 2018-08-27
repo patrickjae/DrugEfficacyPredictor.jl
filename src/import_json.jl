@@ -10,14 +10,12 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 		# should be a dict of views
 		for (k,v) in views
 			view_type = eval(parse(k))
-			if view_type == ExomeSeq
-				key_type = Tuple{Gene, String}
-			elseif view_type == RPPA
+			if view_type == RPPA
 				key_type = Protein
 			else
 				key_type = Gene
 			end
-			data_view = get_dataview!(cl_obj, view_type, DataView{key_type, view_type}(cl.id))
+			data_view = get_dataview!(cl, view_type, DataView{key_type, view_type}(cl.id))
 			info("populating data view with key type '$key_type' and view type '$view_type'")
 			populate_data_view!(experiment, data_view, v)
 			info("adding view type to experiment")
@@ -26,6 +24,17 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 
 	end
 
+end
+
+
+function import_pathway_information(experiment::Experiment, data::Dict{String, Any})
+    info("importing pathway information")
+    if haskey(data, "pathways")
+        pathways = data["pathways"]
+        for pathway_data in pathways
+            add_pathway(experiment, pathway_data)
+        end
+    end
 end
 
 
@@ -38,21 +47,25 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq},
 		gene = add_gene(experiment, entry)
 
 		# mandatory values
-		if !(haskey(entry,"reference_mismatch_avg") && haskey(entry,"variant_mismatch_avg") 
-				&& haskey(entry,"reference_mismatch_sum") && haskey(entry, "variant_mismatch_sum")
-				&& haskey(entry, "reference_dist3effective_avg") && haskey(entry, "variant_dist3effective_avg"))
-			throw(ArgumentError("For ExomeSeq data, you have to specify at least values for reference_mismatch_avg, variant_mismatch_avg,
-									reference_mismatch_sum, variant_mismatch_sum, reference_dist3effective_avg and variant_dist3effective_avg!"))
-		end
-		reference_mismatch_avg = entry["reference_mismatch_avg"]
-		reference_mismatch_sum = entry["reference_mismatch_sum"]
-		reference_dist3effective_avg = entry["reference_dist3effective_avg"]
-		variant_mismatch_avg = entry["variant_mismatch_avg"]
-		variant_mismatch_sum = entry["variant_mismatch_sum"]
-		variant_dist3effective_avg = entry["variant_dist3effective_avg"]
+        if !haskey(entry, "protein_change")
+            throw(ArgumentError("You have to specify at least a protein change for ExomeSeq data."))
+        end
+
+		# if !(haskey(entry,"reference_mismatch_avg") && haskey(entry,"variant_mismatch_avg") 
+		# 		&& haskey(entry,"reference_mismatch_sum") && haskey(entry, "variant_mismatch_sum")
+		# 		&& haskey(entry, "reference_dist3effective_avg") && haskey(entry, "variant_dist3effective_avg"))
+		# 	throw(ArgumentError("For ExomeSeq data, you have to specify at least values for reference_mismatch_avg, variant_mismatch_avg,
+		# 							reference_mismatch_sum, variant_mismatch_sum, reference_dist3effective_avg and variant_dist3effective_avg!"))
+		# end
+        protein_change = entry["protein_change"]
 
 		# optional values
-		protein_change = get(entry, "protein_change", "")
+        reference_mismatch_avg = get(entry, "reference_mismatch_avg", 0.)
+        reference_mismatch_sum = get(entry, "reference_mismatch_sum", 0.)
+        reference_dist3effective_avg = get(entry, "reference_dist3effective_avg", 0.)
+        variant_mismatch_avg = get(entry, "variant_mismatch_avg", 0.)
+        variant_mismatch_sum = get(entry, "variant_mismatch_sum", 0.)
+        variant_dist3effective_avg = get(entry, "variant_dist3effective_avg", 0.)
 
 		num_cosmic = get(entry, "num_cosmic", 0)
 		is_cancer_gene = get(entry, "is_cancer_gene", false)
@@ -67,9 +80,10 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq},
 		tumor_variant_count = get(entry, "tumor_variant_count", 0)
 		details = get(entry, "details", "")
 
-		exome_data = ExomeSeq(reference_mismatch_sum, reference_mismatch_avg, reference_dist3effective_avg,
-								variant_mismatch_sum, variant_mismatch_avg, variant_dist3effective_avg,
-								num_cosmic=num_cosmic, variant_effect=variant_effect, protein_change=protein_change,
+		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg, 
+                                reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum, 
+                                variant_mismatch_avg=variant_mismatch_avg, variant_dist3effective_avg=variant_dist3effective_avg,
+								num_cosmic=num_cosmic, variant_effect=variant_effect,
 								nucleotid_change=nucleotid_change, variant_confidence=variant_confidence,
 								norm_zygosity=norm_zygosity, norm_reference_count=norm_reference_count, norm_variant_count=norm_variant_count,
 								tumor_zygosity=tumor_zygosity, tumor_reference_count=tumor_reference_count, tumor_variant_count=tumor_variant_count,
@@ -85,12 +99,13 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, Methylati
 	for entry in data
 		gene = add_gene(experiment, entry)
 
-		cgct1_value = entry["cgct1"]
-		cct1_value = entry["cct1"]
-		beta_value = entry["illumina_beta_value"]
-
+        # TODO: decide for key name
+		# beta_value = entry["illumina_beta_value"]
+        beta_value = entry["beta_value"]
 		#optionals
 
+        cgct1_value = get(entry, "cgct1", 1)
+        cct1_value = get(entry, "cct1", 1)
 		methylated_threshold = get(entry, "methylated_threshold", .2)
 		illumina_id = get(entry, "illumina_id", "")
 
@@ -106,7 +121,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, GeneExpre
 	for entry in data
 		gene = add_gene(experiment, entry)
 
-		expression_value = entry["expression_value"]
+		expression_value = Float64(entry["expression_value"])
 
 		add_measurement!(d, gene, GeneExpression(expression_value))
 	end
