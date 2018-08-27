@@ -34,22 +34,28 @@ mutable struct PredictionModel
 	K::Int64
 	N::Vector{Int64}
 	
-	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64})
+	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64};
+					⍺_ɣ::Float64=1e-3, β_ɣ::Float64=1e3,
+					⍺_λ::Float64=1e-3, β_λ::Float64=1e3,
+					⍺_ε::Float64=1e-3, β_ε::Float64=1e3,
+					⍺_ν::Float64=1e-3, β_ν::Float64=1e3,
+					⍺_⍵::Float64=1e-3, β_⍵::Float64=1e3,
+					μ_b::Float64=0., 𝜎_0::Float64=20.,
+					μ_e::Float64=1., 𝜎_e::Float64=2.,
+					μ_a::Float64=1., Σ_a::Float64=2.,
+					μ_g::Float64=0., Σ_g::Float64=20.)
 		p = new()
 		p.T = T
 		p.K = K
 		p.N = N
-		# TODO pass in as parameters
-		a_0 = 1e-3
-		b_0 = 1e-3
-		m_0 = 0.
-		s_0 = 10.
 
 		p.ɣ = VectorGammaParameter(T)
 		p.b = Vector{NormalParameter}(T)
 		for t in 1:T
-			p.ɣ[t] = GammaParameter(a_0, b_0)
-			p.b[t] = NormalParameter(m_0, s_0)
+			p.ɣ[t] = GammaParameter(⍺_ɣ, β_ɣ)
+			p.b[t] = NormalParameter(μ_b, 𝜎_0)
+			set_variable_name(p.ɣ[t], "ɣ[$t]")
+			set_variable_name(p.b[t], "b[$t]")
 		end
 
 		p.λ = Vector{VectorGammaParameter}(T)
@@ -57,29 +63,40 @@ mutable struct PredictionModel
 		p.a = Vector{MvNormalParameter}(T)
 		for t in 1:T
 			p.λ[t] = VectorGammaParameter(N[t])
-			p.a[t] = MvNormalParameter(m_0, s_0, N[t])
+			p.a[t] = MvNormalParameter(μ_a, Σ_a, N[t])
 			# p.a[t] = Vector{NormalParameter}(N[t])
+			set_variable_name(p.a[t], "a[$t]")
 			for n in 1:N[t]
-				p.λ[t][n] = GammaParameter(a_0, b_0)
+				p.λ[t][n] = GammaParameter(⍺_λ, β_λ)
+				set_variable_name(p.ɣ[t], "λ[$t][$n]")
 				# p.a[t][n] = NormalParameter(m_0, s_0)
 			end
 		end
 
 		p.ε = VectorGammaParameter(T)
-		[p.ε[t] = GammaParameter(a_0, b_0) for t in 1:T]
+		for t in 1:T
+			p.ε[t] = GammaParameter(⍺_ε, β_ε)
+			set_variable_name(p.ε[t], "ε[$t]")
+		end
 
 		p.ν = VectorGammaParameter(T)
-		[p.ν[t] = GammaParameter(a_0, b_0) for t in 1:T]
+		for t in 1:T
+			p.ν[t] = GammaParameter(⍺_ν, β_ν)
+			set_variable_name(p.ν[t], "ν[$t")
+		end
 		p.G = Matrix{MvNormalParameter}(T,K)
 		for t in 1:T, k in 1:K
-			p.G[t,k] = MvNormalParameter(m_0, s_0, N[t])
+			p.G[t,k] = MvNormalParameter(μ_g, Σ_g, N[t])
+			set_variable_name(p.G[t,k], "G[$t,$k]")
 		end
 
 		p.⍵ = VectorGammaParameter(K)
 		p.e = Vector{NormalParameter}(K)
 		for k in 1:K
-			p.⍵[k] = GammaParameter(a_0, b_0)
-			p.e[k] = NormalParameter(m_0, s_0)
+			p.⍵[k] = GammaParameter(⍺_⍵, β_⍵)
+			p.e[k] = NormalParameter(μ_e, 𝜎_e)
+			set_variable_name(p.⍵[k], "⍵[$k]")
+			set_variable_name(p.e[k], "e[$k]")
 		end
 		p
 	end
@@ -94,11 +111,16 @@ end
 """ An abstract type for samples, can be cell line or human tissue (latter not yet implemented) """
 abstract type Sample end
 
+""" Generic view type, i.e. a way to describe a cell line """
 abstract type ViewType end
 
-abstract type SingleViewType <: ViewType end
+abstract type NAViewType <: ViewType end
 
-abstract type VectorViewType <: ViewType end
+abstract type ValueViewType <: ViewType end
+
+abstract type SingleViewType <: ValueViewType end
+
+abstract type VectorViewType <: ValueViewType end
 
 """ 
 A gene. Mostly represented by its HGNC ID in the motivating Dreamchallenge data set.
@@ -190,10 +212,19 @@ the background noise level.
 mutable struct RNASeq <: SingleViewType
 	expression_value::Float64
 	normalized_value::Float64
-	expression_status::Bool
-	RNASeq(expression_value::Float64, expression_status::Bool) = new(expression_value, expression_value, expression_status)
+	RNASeq(expression_value::Float64) = new(expression_value, expression_value)
 end
 
+"""
+Whole transcriptome shotgun sequencing (RNA-seq) data.
+expression_status is 1 if the Ensembl gene model was detected above 
+the background noise level.
+"""
+mutable struct RNASeqCall <: SingleViewType
+	expression_status::Bool
+	normalized_value::Bool
+	RNASeqCall(expression_status::Bool) = new(expression_status, expression_status)
+end
 
 """
 Whole exome sequencing data. This is a vector view type because we may have multiple measurements for a single Gene key.
@@ -239,9 +270,9 @@ mutable struct ExomeSeq <: VectorViewType
 	variant_dist3effective_avg::Float64
 	details::String
 	normalized_value::Float64
-	function ExomeSeq(reference_mismatch_sum::Float64, reference_mismatch_avg::Float64, reference_dist3effective_avg::Float64,
-		variant_mismatch_sum::Float64, variant_mismatch_avg::Float64, variant_dist3effective_avg::Float64; 
-		num_cosmic::Int64=0, variant_effect::String="", protein_change::String="", nucleotid_change::String="",
+	function ExomeSeq(protein_change::String; reference_mismatch_sum::Float64=0., reference_mismatch_avg::Float64=0., 
+		reference_dist3effective_avg::Float64=0., variant_mismatch_sum::Float64=0., variant_mismatch_avg::Float64=0., 
+		variant_dist3effective_avg::Float64=0., num_cosmic::Int64=0, variant_effect::String="", nucleotid_change::String="",
 		variant_confidence::Float64=1., norm_zygosity::String="", norm_reference_count::Int64=0, norm_variant_count::Int64=0,
 		tumor_zygosity::String="", tumor_reference_count::Int64=0, tumor_variant_count::Int64=0, details::String="")
 		data_summary = reference_mismatch_avg + variant_mismatch_avg
@@ -311,10 +342,13 @@ the ordering of this vector.
 struct DataView{K <: KeyType, V <: ViewType}
 	cell_line_id::String
 	key_type::Type{K}
+	view_type::Type{V}
 	used_keys::Set{K}
+	common_keys::Dict{String, Vector{K}}
 	measurements::Union{Dict{K, V}, MultiDict{K, V}}
-	DataView{K,V}(cell_line_id::String) where {K,V <: SingleViewType} = new(cell_line_id, K, Set{K}(), Dict{K,V}())
-	DataView{K,V}(cell_line_id::String) where {K,V <: VectorViewType} = new(cell_line_id, K, Set{K}(), MultiDict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K,V <: SingleViewType} = new(cell_line_id, K, V, Set{K}(), Dict{String, Vector{K}}(), Dict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K,V <: VectorViewType} = new(cell_line_id, K, V, Set{K}(), Dict{String, Vector{K}}(), MultiDict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K, V <: NAViewType} = new(cell_line_id, K, V, Set{K}(), Dict{String, Vector{K}}(), Dict{K,V}())
 end
 
 
@@ -346,30 +380,45 @@ mutable struct Outcome
 	Outcome(outcome_type::String) = new(OrderedDict{CellLine, Float64}(), outcome_type, OrderedDict{CellLine, Float64}(), .0, 1.)
 end
 
+
+
+# mutable struct Prediction
+# 	predicted_outcome::Dict{Drug, Float64}
+# 	predicted_rank::Dict{Drug, Int64}
+# 	Prediction() = new(Dict{Drug, Float64}(), Dict{Drug,Int64}())
+# end
+
 """ 
 An experiment comprised of measurements (where each is associated 
-with a cell line) and results.
+with a cell line) and results. This data structure holds all data that is provided
+by the user, i.e. including pathway information, different data views, training and test responses etc.
 """
 mutable struct Experiment
 	results::OrderedDict{Drug, Outcome}
+	test_results::OrderedDict{Drug, Outcome}
 	cell_lines::OrderedDict{String, CellLine}
+	drugs::Dict{String, Drug}
 	genes::Dict{Int64, Gene}
 	genes_by_hgnc::Dict{String, Gene}
 	genes_by_ensembl::Dict{String, Gene}
 	proteins::Dict{String, Protein}
 	views::OrderedSet{Type{<:ViewType}}
 	statistics::Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}
+	pathway_information::OrderedSet{Pathway}
 	is_normalized::Bool
 	function Experiment()
 		new(
 			OrderedDict{Drug, Outcome}(), # results
+			OrderedDict{Drug, Outcome}(), # test results
 			OrderedDict{String, CellLine}(), # cell_lines
+			Dict{String, Drug}(), # drugs 
 			Dict{Int64, Gene}(), # genes
 			Dict{String, Gene}(), # genes by hgnc
 			Dict{String, Gene}(), # genes by ensembl
 			Dict{String, Protein}(), # proteins
 			OrderedSet{Type{<:ViewType}}(), # views
 			Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}(), # statistics
+			OrderedSet{Pathway}(), #pathways
 			false # is normalized
 			)
 	end
@@ -380,12 +429,23 @@ end
 ########################################      PREDICTOR        ###############################################
 ##############################################################################################################
 ##############################################################################################################
-struct DrugEfficacyPrediction
+mutable struct DrugEfficacyPrediction
 	experiment::Experiment
 	model::PredictionModel
 	kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	targets::OrderedDict{Drug, Vector{Float64}}
+	cross_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	test_targets::OrderedDict{Drug, Vector{Float64}}
 	continuous_kernel::Function
 	discrete_kernel::Function
-	DrugEfficacyPrediction(experiment::Experiment, model::PredictionModel) = new(experiment, model, OrderedDict{Drug, Vector{Matrix{Float64}}}(), OrderedDict{Drug, Vector{Float64}}())
+	function DrugEfficacyPrediction(experiment::Experiment, model::PredictionModel) 
+		new(
+			experiment, 
+			model, 
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
+			OrderedDict{Drug, Vector{Float64}}(),
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
+			OrderedDict{Drug, Vector{Float64}}()
+		)
+	end
 end
