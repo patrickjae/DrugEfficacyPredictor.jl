@@ -14,7 +14,6 @@ include("prediction.jl")
 """
 Adjust info and error functions to include time stamp.
 """
-
 const info_messages = Channel{Tuple}(32)
 const warn_messages = Channel{Tuple}(32)
 const error_messages = Channel{Tuple}(32)
