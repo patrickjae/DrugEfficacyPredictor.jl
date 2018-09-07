@@ -1,5 +1,10 @@
 julia 0.6
 CSV
 Distributions
-HttpServer
+JSON
+Plots
+Rsvg
+HTTP
 DataFrames
+DataStructures
+SpecialFunctions
