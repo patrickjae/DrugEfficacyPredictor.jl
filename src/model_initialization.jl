@@ -39,8 +39,8 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     all_drugs = collect(keys(experiment.results)) # the tasks
 
     # compute base kernels between cell lines once, one for each ViewType
-    base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
-    pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
+    dep_base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
+    dep_pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
     grouped_data_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
     cell_lines = collect(values(experiment.cell_lines))
     # find cell lines that are present in all views, i.e. we need all data views for a cell line
@@ -48,17 +48,19 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
 
     (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(experiment, cell_lines)
     T = length(experiment.results)
-    N = Vector{Int64}(T)
+    N = Vector{Int64}(undef, T)
 
     # compute drug specific kernels
     kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
     targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
-    cross_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    cross_base_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    cross_pathway_specific_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
     test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
     for (t, drug) in enumerate(all_drugs)
-        kernels[drug] = Vector{Matrix{Float64}}()
+        dep_base_kernels[drug] = Vector{Matrix{Float64}}()
+        pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
         cross_kernels[drug] = Vector{Matrix{Float64}}()
         result_cell_lines = collect(keys(experiment.results[drug].outcome_values))
         test_result_cell_lines = collect(keys(experiment.test_results[drug].outcome_values))
@@ -85,12 +87,12 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
             # @info "view $v: $(length(idx_in_outcome)), overall: $(length(idx2)), N[t]: $(model.N[t])"
 
             # add base kernel restricted to cell lines for which we have outcome
-            push!(kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
-            push!(cross_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
+            push!(dep_base_kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
+            push!(cross_base_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
 
             for pw_kernel in pathway_specific_kernels[v]
-                push!(kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
-                push!(cross_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
+                push!(dep_pathway_specific_kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
+                push!(cross_pathway_specific_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
             end
         end
         # compute additional kernels
@@ -106,9 +108,11 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     pm = PredictionModel(T, K, N)
     dep = DrugEfficacyPrediction(experiment, pm)
     for drug in all_drugs
-        dep.kernels[drug] = kernels[drug]
+        dep.base_kernels[drug] = dep_base_kernels[drug]
+        dep.pathway_specific_kernels[drug] = dep_pathway_specific_kernels[drug]
         dep.targets[drug] = targets[drug]
-        dep.cross_kernels[drug] = cross_kernels[drug]
+        dep.cross_base_kernels[drug] = cross_base_kernels[drug]
+        dep.cross_pathway_specific_kernels[drug] = cross_pathway_specific_kernels[drug]
         dep.test_targets[drug] = test_targets[drug]
     end
     dep
@@ -134,7 +138,7 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
         K += 1
         @info "computing pathway specific kernels..."
         num_pws = length(experiment.pathway_information)
-        ps_kernels = Vector{Matrix{Float64}}(num_pws)
+        ps_kernels = Vector{Matrix{Float64}}(undef, num_pws)
         tt = 0
         for p in 1:num_pws
             pathway = experiment.pathway_information[p]

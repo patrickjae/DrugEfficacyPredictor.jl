@@ -3,7 +3,7 @@ import DrugEfficacyPredictor.expected_value
 import DrugEfficacyPredictor.expected_squared_value
 import DrugEfficacyPredictor.elbo
 
-using Plots, Rsvg
+# using Plots, Rsvg
 
 function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction)
 	m = dep.model
@@ -36,7 +36,11 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	end
     (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, collect(values(dep.experiment.cell_lines)))
     
-    all_errors = Vector{String}(length(all_configurations))
+    K = dep.model.K
+    base_kernels = dep.base_kernels
+    pathway_specific_kernels = dep.pathway_specific_kernels
+
+    all_errors = Vector{String}(undef, length(all_configurations))
 
     # idx = Threads.Atomic{Int64}(1)
 	f = open(joinpath(dest_path, "errors.txt"), "w")

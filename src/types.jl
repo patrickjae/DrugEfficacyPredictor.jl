@@ -440,18 +440,22 @@ end
 mutable struct DrugEfficacyPrediction
 	experiment::Experiment
 	model::PredictionModel
-	kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	pathway_specific_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	targets::OrderedDict{Drug, Vector{Float64}}
-	cross_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	cross_base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	cross_pathway_specific_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	test_targets::OrderedDict{Drug, Vector{Float64}}
 	continuous_kernel::Function
 	discrete_kernel::Function
 	function DrugEfficacyPrediction(experiment::Experiment, model::PredictionModel) 
 		new(
 			experiment, 
-			model, 
+			model,
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Float64}}(),
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Float64}}()
 		)
