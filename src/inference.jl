@@ -34,7 +34,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	for alpha in gamma_dist_alphas, mu in normal_means, v in normal_vars
 		push!(all_configurations, [alpha, mu, v])
 	end
-    (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, collect(values(dep.experiment.cell_lines)))
+    # (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, collect(values(dep.experiment.cell_lines)))
     
     K = dep.model.K
     base_kernels = dep.base_kernels
