@@ -33,15 +33,15 @@ function test(dep::DrugEfficacyPrediction)
         actual_outcomes = dep.test_targets[drug]
         mse += sum((actual_outcomes .- y_mean_rescaled).^2)/m.N[t]
     end
-    # info("view weights: $(expected_value.(m.e))")
+    # @info view_weights=expected_value.(m.e))
     (mse, predictions, rankings)
 end
 
 
 function predict_outcomes(dep::DrugEfficacyPrediction, 
             cell_lines::Vector{CellLine}, 
-            base_kernels::Union{Void, Dict{Type{<:ViewType}, Matrix{Float64}}}=nothing,
-            pathway_specific_kernels::Union{Void, Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}}=nothing)
+            base_kernels::Union{Nothing, Dict{Type{<:ViewType}, Matrix{Float64}}}=nothing,
+            pathway_specific_kernels::Union{Nothing, Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}}=nothing)
     m = dep.model
     predictions = Dict{Drug, Vector{Float64}}()
     training_cell_lines = collect(values(dep.experiment.cell_lines))  
@@ -56,7 +56,7 @@ function predict_outcomes(dep::DrugEfficacyPrediction,
         #     # dataviews_from_training = map(cl -> cl.views[v], collect(keys(dep.experiment.results[drug].outcome_values)))
         #     k = compute_kernel(dataviews_from_training, dataviews_to_predict)
         #     base_kernels[v] = k
-        #     # info("computed kernels for view $v, num data views to predict: $(length(dataviews_to_predict)), data views in training: $(length(dataviews_from_training)), size of kernel: $(size(k))")
+        #     # @info "computed kernels for view $v, num data views to predict: $(length(dataviews_to_predict)), data views in training: $(length(dataviews_from_training)), size of kernel: $(size(k))"
         # end
     end
     # do predictions for all drugs we saw at training time
@@ -72,7 +72,7 @@ function predict_outcomes(dep::DrugEfficacyPrediction,
             for pw_kernel in pathway_specific_kernels[v]
                 push!(kernels, pw_kernel[dataviews_from_training_idx,:])
             end
-            # info("computed kernels for view $v, size of kernel: $(size(k))")
+            # @info "computed kernels for view $v, size of kernel: $(size(k))"
         end
         # TODO: compute kernel combinations
 

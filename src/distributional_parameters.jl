@@ -15,11 +15,11 @@ mutable struct GammaParameter <: ModelParameter
 		gp = new()
 		gp.prior_a = a
 		gp.prior_b = b
-		gp.prior_distribution = Distributions.Gamma(a, 1./b)
+		gp.prior_distribution = Distributions.Gamma(a, 1. / b)
 
 		gp.variational_a = a
 		gp.variational_b = b
-		gp.expectation_trace = Float64[]
+		gp.expectation_trace = Vector{Float64}(undef, 0)
 		gp.var_name = variable_name
 		gp
 	end
@@ -46,7 +46,7 @@ mutable struct NormalParameter <: ModelParameter
 
 		np.variational_mean = rand(np.prior_distribution)
 		np.variational_variance = s_0
-		np.expectation_trace = Float64[]
+		np.expectation_trace = Vector{Float64}(undef, 0)
 		np.var_name = variable_name
 		np
 	end
@@ -66,11 +66,11 @@ mutable struct MvNormalParameter <: ModelParameter
 	function MvNormalParameter(m_0::Float64, s_0::T, D::Int64; variable_name = "MvNormalParameter") where {T<:Union{Float64, Vector{Float64}}}
 		np = new()
 		np.prior_mean = m_0.*ones(D)
-		np.prior_covariance = s_0 .* eye(D)
+		np.prior_covariance = s_0 .* Matrix(1.0I, D, D)
 		np.prior_distribution = Distributions.MvNormal(np.prior_mean, np.prior_covariance)
 
 		np.variational_mean = rand(np.prior_distribution)
-		np.variational_covariance = s_0 .* eye(D)
+		np.variational_covariance = s_0 .* Matrix(1.0I, D, D)
 		np.expectation_trace = Vector{Vector{Float64}}()
 		np.var_name = variable_name
 		np
@@ -81,18 +81,18 @@ set_variable_name(p::ModelParameter, name::String) = p.var_name = name
 
 function check_params(p::GammaParameter)
 	if p.variational_a < 0
-		# warn("paramater a of $(p.var_name) is negative: $(p.variational_a)")
+		# @warn "paramater negative:" p.var_name  p.variational_a
 		p.variational_a = 1e-7
 	end
 	if p.variational_b < 0
-		# warn("parameter b of $(p.var_name) is negative: $(p.variational_b)")
+		# @warn "paramater negative:" p.var_name  p.variational_b
 		p.variational_b = 1e-7
 	end
 end
 
 function check_params(p::NormalParameter)
 	if p.variational_variance ≤ 0
-		# warn("variance of $(p.var_name) non-positive: $(p.variational_variance)")
+		# @warn "variance non-positive" p.var_name p.variational_variance
 	end
 	p.variational_variance = 1e-7
 end
@@ -112,7 +112,7 @@ expected_squared_value(p::MvNormalParameter) = p.variational_mean*p.variational_
 
 function elbo(gp::GammaParameter)
 	check_params(gp)
-	q_dist = Distributions.Gamma(gp.variational_a, 1./gp.variational_b)
+	q_dist = Distributions.Gamma(gp.variational_a, 1. / gp.variational_b)
 	compute_elbo(q_dist, gp)
 end
 

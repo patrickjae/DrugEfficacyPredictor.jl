@@ -44,7 +44,7 @@ function add_gene(experiment::Experiment, data::Dict{String, Any})
 	gene_id = data["gene_id"]
 	id_type = get(data, "type_id", "entrez_id")
 	is_cancer_gene = get(data, "is_cancer_gene", false)
-	# info("gene_id: $gene_id, id_type: $id_type, cancer: $is_cancer_gene")
+	# @info gene_id id_type is_cancer_gene
 	add_gene(experiment, gene_id, id_type, is_cancer_gene = is_cancer_gene)
 end
 
@@ -55,18 +55,18 @@ end
 function add_gene_id!(experiment::Experiment, gene::Gene, id::String, id_type::String)
 	if id_type == "hgnc_id"
 		if (gene.hgnc_id != "") && (gene.hgnc_id != id) 
-			warn("overwriting HGNC_ID, new value is $(id), was $(gene.hgnc_id) before") 
+			@warn "overwriting HGNC_ID" new_value=id old_value=gene.hgnc_id
 		end
 		gene.hgnc_id = id
 		experiment.genes_by_hgnc[id] = gene
 	elseif id_type == "ensembl_id"
 		if (gene.ensembl_id != "") && (gene.ensembl_id != id) 
-			warn("overwriting Ensembl ID, new value is $(id), was $(gene.ensembl_id) before (other IDs: $(gene.hgnc_id) (HGNC), $(gene.entrez_id) (Entrez))") 
+			@warn "overwriting Ensembl ID" new_value=id old_value=gene.ensembl_id other_ids=[gene.hgnc_id, gene.entrez_id]
 		end
 		gene.ensembl_id = id
 		experiment.genes_by_ensembl[id] = gene
 	else
-		warn("unknown gene id type $id_type, ignoring")
+		@warn "unknown gene id type $id_type, ignoring"
 	end
 end
 
@@ -96,21 +96,25 @@ end
 
 function add_pathway(experiment::Experiment, data::Dict{String, Any})
 	if !haskey(data, "id") throw(ArgumentError("No ID provided for current pathway")) end
-	if !haskey(data, "name") throw(ArgumentError("No name provided for current pathway")) end
-	if !haskey(data, "genes") || !haskey(data, "type_id") throw(ArgumentError("You need to specify gene type id (entrez_id, hgnc_id, ensembl_id) and a list of genes for the pathway.")) end
+	if !haskey(data, "name") throw(ArgumentError("No name provided for cubrrent pathway")) end
+	if !haskey(data, "genes") throw(ArgumentError("You need to specify a list of genes represented by type_id-id pairs.")) end
 
-	id_type = data["type_id"]
-	genes = Vector{Gene}()
+	genes = Set{Gene}()
 	for g in data["genes"]
-		try
-			gene = get_gene(experiment, g, id_type)
-			push!(genes, gene)
-		catch KeyError
-			warn("no data for gene_id $g")
+		found = false
+		for (id_type, gene_id) in g
+			try
+				gene = get_gene(experiment, gene_id, id_type)
+				push!(genes, gene)
+				found = true
+				# break
+			catch KeyError end
+		end
+		if !found
+			@warn "no data for gene" gene=g pathway=data["name"] pathway_id=data["id"]
 		end
 	end
-	info(typeof(genes))
-	add_pathway(experiment, genes, name = string(data["name"]), id = string(data["id"]))
+	add_pathway(experiment, collect(genes), name = string(data["name"]), id = string(data["id"]))
 end
 
 function add_gene_to_pathway(pw::Pathway{K}, gene::K) where {K<:KeyType}
@@ -136,7 +140,7 @@ function add_protein(experiment::Experiment, data::Dict{String, Any})
 end
 
 ######### VIEWS ###########
-add_view!(experiment::Experiment, view::Type{<:ViewType}) = union!(experiment.views, [view])
+add_view!(experiment::Experiment, dv::Type{<:ViewType}) = push!(experiment.views, dv)
 
 ######### DATA VIEWS ###########
 
@@ -149,27 +153,27 @@ get_dataview!(cl::CellLine, data_type::Type{<:ViewType}, dv::DataView{<:KeyType,
 function add_measurement(d::DataView{<:KeyType,<:ViewType}, subject::KeyType, measurement::ViewType)
 	if subject ∉ d.used_keys
 		d.measurements[subject] = measurement
-		union!(d.used_keys, [subject])
+		push!(d.used_keys, subject)
 		return d
 	end
-	warn("measurement already exists for $subject, ignoring...")
-	warn("if you want to force the new value, use add_measurement! instead")
+	@warn "measurement already exists for $subject, ignoring..."
+	@warn "if you want to force the new value, use add_measurement! instead"
 	d
 end
 	
 function add_measurement!(d::DataView{<:KeyType, <:VectorViewType}, subject::KeyType, measurement::VectorViewType)
-	union!(d.used_keys, [subject])
+	push!(d.used_keys, subject)
 	insert!(d.measurements, subject, measurement)
 end
 
 function add_measurement!(d::DataView{<:KeyType,<:SingleViewType}, subject::KeyType, measurement::SingleViewType)
-	union!(d.used_keys, [subject])
+	push!(d.used_keys, subject)
 	d.measurements[subject] = measurement
 	d
 end
 
 function get_measurement!(d::DataView{<:KeyType, <:SingleViewType}, subject::KeyType, measurement::SingleViewType)
-	union!(d.used_keys, [subject])
+	push!(d.used_keys, subject)
 	get!(d.measurements, subject, measurement)
 end
 
@@ -222,7 +226,7 @@ function normalize_data_views(experiment::Experiment)
 			mean_val = mean(all_values)
 			std_val = stdm(all_values, mean_val)
 			if std_val == 0.
-				# warn("standard deviation is zero in view $v for key $key")
+				# @warn "standard deviation is zero in view $v for key $key"
 				std_val += 1e-7
 			end
 			#iterate over values again and normalize 

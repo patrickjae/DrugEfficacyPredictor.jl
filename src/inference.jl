@@ -11,18 +11,13 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction)
 	mse = 0
 	for (t, drug) in enumerate(keys(dep.experiment.results))
 		y_mean = sum(expected_value.(m.G[t,:]) .* expected_value.(m.e)) .+ expected_value(m.b[t])
-		y_cov = 1./expected_value(m.ε[t])
+		y_cov = 1. / expected_value(m.ε[t])
 		actual_outcomes = dep.targets[drug]
-		# info("######### Drug $(drug.id) #########")
-		# info("target ranking    : $(sortperm(dep.targets[drug]))")
-		# info("prediction ranking: $(sortperm(y_mean))")
-		# # info("prediction variance: $y_cov")
-		# # info("gamma, epsilon, nu: $(expected_value(m.ɣ[t])), $(expected_value(m.ε[t])), $(expected_value(m.ν[t]))")
-		# info("##############################")
+		# @info "######### Drug $(drug.id) #########" target_ranking=sortperm(dep.targets[drug]) prediction_ranking=sortperm(y_mean) prediction_variance=y_cov gamma=expected_value(m.ɣ[t]) epsilon=expected_value(m.ε[t]) nu=expected_value(m.ν[t])
 		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov.*eye(m.N[t])), actual_outcomes)
 		mse += sum((actual_outcomes .- y_mean).^2)/m.N[t]
 	end
-	# info("view weights: $(expected_value.(m.e))")
+	# @info view_weights=expected_value.(m.e)
 	(ll, mse)
 end
 
@@ -51,11 +46,11 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 		(alpha, mu, v) = all_configurations[i]
 		try
 			(lls, errs, test_errs) = parameter_inference(dep, convergence_criterion=1e-4, min_iter=10, 
-						⍺_ɣ=alpha, β_ɣ=1./alpha,
-						⍺_λ=alpha, β_λ=1./alpha,
-						⍺_ε=alpha, β_ε=1./alpha,
-						⍺_ν=alpha, β_ν=1./alpha,
-						⍺_⍵=alpha, β_⍵=1./alpha,
+						⍺_ɣ=alpha, β_ɣ=1. / alpha,
+						⍺_λ=alpha, β_λ=1. / alpha,
+						⍺_ε=alpha, β_ε=1. / alpha,
+						⍺_ν=alpha, β_ν=1. / alpha,
+						⍺_⍵=alpha, β_⍵=1. / alpha,
 						μ_b=mu, 𝜎_0=v,
 						μ_e=mu, 𝜎_e=v,
 						μ_a=mu, Σ_a=v,
@@ -69,10 +64,10 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 			# Plots.pdf(p, "gridsearch_charts/alpha_$(alpha)_mean_$(mu)_var_$(v).txt", p)
 			(predictions, _, _) = predict_outcomes(dep, collect(values(dep.experiment.cell_lines)), base_kernels, pathway_specific_kernels)
 			write_prediction_file(joinpath(dest_path,"gridsearch_results","alpha_$(alpha)_mean_$(mu)_var_$(v).txt"), dep, predictions)
-			# info("Processed settings: alpha = $alpha, mu = $mu, variance = $v, Training error: $(errs[end]), Test error: $(test_errs[end])")
+			# @info "Processed settings:" alpha mu variance=v training_error=errs[end] test_error=test_errs[end]
 		catch exc
 			# display(stacktrace(catch_backtrace()))
-			# warn("Exception occurred: $exc, Settings: alpha = $alpha, mu = $mu, variance = $v")
+			# @warn "Exception occurred" exc alpha mu variance=v
 		end
 	end
 	for s in all_errors
@@ -133,7 +128,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		ll, err = parameter_inference_step(dep, kernel_products, all_tasks)
 		convergence = (old_ll - ll)/old_ll
 		err_convergence = (old_err - err)/old_err
-		# info("current likelihood: $ll, current error: $err, convergence: $convergence, error convergence: $err_convergence")
+		# @info current_likelihood=ll current_error=err convergence error_convergence=err_convergence
 		# break
 		old_ll = ll
 		old_err = err
@@ -154,7 +149,7 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 
     cell_lines = collect(values(dep.experiment.cell_lines))
 
-	# info("compute intermed kernel sums")
+	# @info "compute intermed kernel sums"
 	g_times_kernel = update_intermed_kernel_sum(dep)
 	# updates for model parameters in turn
 	ll = 0
@@ -166,27 +161,27 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 			m.λ[t][n].variational_a = m.λ[t][n].prior_a + .5
 			m.λ[t][n].variational_b = m.λ[t][n].prior_b + .5*a_square[n,n]
 		end
-		# info("λ[$t]: $(expected_value.(m.λ[t]))")
+		# @info λ[t]=expected_value.(m.λ[t])
 		ll += sum(elbo.(m.λ[t]))
 
 		# a
 		ν_expected = expected_value(m.ν[t])
 		m.a[t].variational_covariance = inv(diagm(expected_value.(m.λ[t])) + ν_expected.*kernel_products[drug])
 		m.a[t].variational_mean = m.a[t].variational_covariance*(ν_expected .* g_times_kernel[drug])
-		# info("a[$t]: $(expected_value(m.a[t]))")
+		# @info a[t]=expected_value(m.a[t])
 		ll += elbo(m.a[t])
 
 		# gamma
 		m.ɣ[t].variational_a = m.ɣ[t].prior_a + .5
 		m.ɣ[t].variational_b = m.ɣ[t].prior_b + .5*expected_squared_value(m.b[t])
-		# info("ɣ[$t]: $(expected_value(m.ɣ[t]))")
+		# @info ɣ[t]=expected_value(m.ɣ[t])
 		ll += elbo(m.ɣ[t])
 
 		# b
 		ε_expected = expected_value(m.ε[t])
-		m.b[t].variational_variance = 1./(expected_value(m.ɣ[t]) + ε_expected*m.N[t])
+		m.b[t].variational_variance = 1. / (expected_value(m.ɣ[t]) + ε_expected*m.N[t])
 		m.b[t].variational_mean = m.b[t].variational_variance*ε_expected*sum(dep.targets[drug] - exp_gte)
-		# info("b[$t]: $(expected_value(m.b[t]))")
+		# @info b[t]=expected_value(m.b[t])
 		ll += elbo(m.b[t])
 
 		# nu
@@ -210,7 +205,7 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 		# 	sum_g_minus_kernel_a += trace(exp_G_sq) - 2*dot(exp_G, dep.kernels[drug][k]*exp_a) + trace(kernel_products[drug] * exp_a_sq)
 		# end
 		# m.ν[t].variational_b = m.ν[t].prior_b + .5*sum_g_minus_kernel_a
-		# info("ν[$t]: $(expected_value(m.ν[t]))")
+		# @info ν[t]=expected_value(m.ν[t])
 		ll += elbo(m.ν[t])
 
 		# epsilon
@@ -231,7 +226,7 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 		# [exp_g_sq_sum += expected_squared_value(m.G[t,k]) for k in 1:length(dep.kernels[drug])]
 		# m.ε[t].variational_b = m.ε[t].prior_b + .5*(sum(expected_squared_value.(m.e))*trace(exp_g_sq_sum) + 2*sum(g_times_e[drug].*expected_value(m.b[t])) + expected_squared_value(m.b[t]))
 		m.ε[t].variational_b = m.ε[t].prior_b + .5*eps_beta_update
-		# info("ε[$t]: $(expected_value(m.ε[t]))")
+		# @info ε[t]=expected_value(m.ε[t])
 		ll += elbo(m.ε[t])
 	end
 	for k in 1:m.K
@@ -249,9 +244,9 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 		# 	# exp_g_sq_sum += trace(expected_squared_value(m.G[t,k]))
 		# 	exp_g_times_y_minus_b += dot(expected_value(m.G[t,k]), dep.targets[drug] .- expected_value(m.b[t]))
 		# end
-		m.e[k].variational_variance = 1./(expected_value(m.⍵[k]) + exp_g_sq_sum)
+		m.e[k].variational_variance = 1. / (expected_value(m.⍵[k]) + exp_g_sq_sum)
 		m.e[k].variational_mean = m.e[k].variational_variance * eta1
-		# info("e[$k]: $(expected_value(m.e[k]))")
+		# @info e[k]=expected_value(m.e[k])
 		ll += elbo(m.e[k])
 	end
 	# G
@@ -264,13 +259,13 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 			# NOTE: alter prior to allow correlations between cell lines, i.e. have a matrix prior on nu
 			exp_e = expected_value(m.e[k])
 			exp_g_sum -= expected_value(m.G[t,k])*exp_e
-			m.G[t,k].variational_covariance = eye(m.N[t]) .* 1./(2*expected_value(m.ε[t])*expected_squared_value(m.e[k]) + expected_value(m.ν[t]))
+			m.G[t,k].variational_covariance = eye(m.N[t]) .* 1. / (2*expected_value(m.ε[t])*expected_squared_value(m.e[k]) + expected_value(m.ν[t]))
 
 			eta1 = expected_value(m.ν[t]).*kernel*expected_value(m.a[t]) + expected_value(m.ε[t])*exp_e*(dep.targets[drug] .- expected_value(m.b[t]) - exp_g_sum)
 			m.G[t,k].variational_mean = m.G[t,k].variational_covariance*eta1
 			ll += elbo(m.G[t,k])
 			exp_g_sum += expected_value(m.G[t,k])*exp_e
-			# info("G[$t,$k]: $(expected_value(m.G[t,k]))")
+			# @info G[t,k]=expected_value(m.G[t,k])
 		end
 		#TODO: compute log likelihood E_q[ln p(gamma)] - E_q[ln q(gamma)]
 	end
@@ -281,28 +276,28 @@ end
 
 function update_intermed_times_weights(dep::DrugEfficacyPredictor.DrugEfficacyPrediction)
 	ret = Dict{Drug, Vector{Float64}}()
-	# info("update_intermed_times_weights")
+	# @info "update_intermed_times_weights"
 	for (t, drug) in enumerate(collect(keys(dep.experiment.results)))
 		g_times_weight_sum = zeros(dep.model.N[t])
 		for k in 1:length(dep.kernels[drug])
 			g_times_weight_sum += expected_value(dep.model.G[t,k]).*expected_value(dep.model.e[k])
 		end
 		ret[drug] = g_times_weight_sum
-		# info("$drug: $g_times_weight_sum")
+		# info drug=g_times_weight_sum
 	end
 	ret
 end
 
 function update_intermed_kernel_sum(dep::DrugEfficacyPredictor.DrugEfficacyPrediction)
 	ret = Dict{Drug, Vector{Float64}}()
-	# info("update_intermed_kernel_sum")
+	# @info "update_intermed_kernel_sum"
 	for (t, drug) in enumerate(collect(keys(dep.experiment.results)))
 		g_kernel_sum = zeros(dep.model.N[t])
 		for (k, kernel) in enumerate(dep.kernels[drug])
 			g_kernel_sum += kernel*expected_value(dep.model.G[t,k])
 		end
 		ret[drug] = g_kernel_sum
-		# info("$drug: $g_kernel_sum")
+		# @info drug=g_kernel_sum
 	end
 	ret
 end

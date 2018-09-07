@@ -2,7 +2,7 @@
 Creates a Cell line object from JSON. Creates Gene (or Protein) objects on the fly as needed.
 """
 function import_cell_line(experiment::Experiment, data::Dict{String, Any})
-	info("fetching/creating cell line...")
+	@info "fetching/creating cell line..."
 	cl = get_cell_line(experiment, data)
 	if haskey(data, "views")
 		# construct the views
@@ -16,9 +16,9 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 				key_type = Gene
 			end
 			data_view = get_dataview!(cl, view_type, DataView{key_type, view_type}(cl.id))
-			info("populating data view with key type '$key_type' and view type '$view_type'")
+			@info "populating data view with key type '$key_type' and view type '$view_type'"
 			populate_data_view!(experiment, data_view, v)
-			info("adding view type to experiment")
+			@info "adding view type to experiment"
 			add_view!(experiment, view_type)
 		end
 
@@ -28,11 +28,12 @@ end
 
 
 function import_pathway_information(experiment::Experiment, data::Dict{String, Any})
-    info("importing pathway information")
+    @info "importing pathway information"
     if haskey(data, "pathways")
         pathways = data["pathways"]
         for pathway_data in pathways
             add_pathway(experiment, pathway_data)
+            @info "done for $(pathway_data["name"])"
         end
     end
 end

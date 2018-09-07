@@ -49,8 +49,8 @@ mutable struct PredictionModel
 		p.K = K
 		p.N = N
 
-		p.ɣ = VectorGammaParameter(T)
-		p.b = Vector{NormalParameter}(T)
+		p.ɣ = VectorGammaParameter(undef, T)
+		p.b = Vector{NormalParameter}(undef, T)
 		for t in 1:T
 			p.ɣ[t] = GammaParameter(⍺_ɣ, β_ɣ)
 			p.b[t] = NormalParameter(μ_b, 𝜎_0)
@@ -58,11 +58,11 @@ mutable struct PredictionModel
 			set_variable_name(p.b[t], "b[$t]")
 		end
 
-		p.λ = Vector{VectorGammaParameter}(T)
+		p.λ = Vector{VectorGammaParameter}(undef, T)
 		# p.a = Vector{Vector{NormalParameter}}(T)
-		p.a = Vector{MvNormalParameter}(T)
+		p.a = Vector{MvNormalParameter}(undef, T)
 		for t in 1:T
-			p.λ[t] = VectorGammaParameter(N[t])
+			p.λ[t] = VectorGammaParameter(undef, N[t])
 			p.a[t] = MvNormalParameter(μ_a, Σ_a, N[t])
 			# p.a[t] = Vector{NormalParameter}(N[t])
 			set_variable_name(p.a[t], "a[$t]")
@@ -73,25 +73,25 @@ mutable struct PredictionModel
 			end
 		end
 
-		p.ε = VectorGammaParameter(T)
+		p.ε = VectorGammaParameter(undef, T)
 		for t in 1:T
 			p.ε[t] = GammaParameter(⍺_ε, β_ε)
 			set_variable_name(p.ε[t], "ε[$t]")
 		end
 
-		p.ν = VectorGammaParameter(T)
+		p.ν = VectorGammaParameter(undef, T)
 		for t in 1:T
 			p.ν[t] = GammaParameter(⍺_ν, β_ν)
 			set_variable_name(p.ν[t], "ν[$t")
 		end
-		p.G = Matrix{MvNormalParameter}(T,K)
+		p.G = Matrix{MvNormalParameter}(undef, T, K)
 		for t in 1:T, k in 1:K
 			p.G[t,k] = MvNormalParameter(μ_g, Σ_g, N[t])
 			set_variable_name(p.G[t,k], "G[$t,$k]")
 		end
 
-		p.⍵ = VectorGammaParameter(K)
-		p.e = Vector{NormalParameter}(K)
+		p.⍵ = VectorGammaParameter(undef, K)
+		p.e = Vector{NormalParameter}(undef, K)
 		for k in 1:K
 			p.⍵[k] = GammaParameter(⍺_⍵, β_⍵)
 			p.e[k] = NormalParameter(μ_e, 𝜎_e)
@@ -127,8 +127,8 @@ A gene. Mostly represented by its HGNC ID in the motivating Dreamchallenge data 
 Preferred ID is Entrez ID, Ensembl-ID can be stored as well.
 As an additional data if available, can hold information on being a cancer gene.
 """
-# is still mutable here, since we are continuously collecting information, maybe make immutable in the future
 mutable struct Gene
+	# is still mutable here, since we are continuously collecting information, maybe make immutable in the future
 	entrez_id::Int64 # <- primary key preferred
 	hgnc_id::String
 	ensembl_id::String
@@ -157,9 +157,18 @@ end
 
 import Base.isless
 function isless(x::Gene, y::Gene)
-	if isless(x.entrez_id, y.entrez_id) return true
-	elseif x.entrez_id == y.entrez_id && (isless(x.ensembl_id, y.ensembl_id) || isless(x.hgnc_id, y.hgnc_id)) return true
-	else return false end
+	if x.entrez_id != -1 || y.entrez_id != -1
+		return isless(x.entrez_id, y.entrez_id)
+	end
+	if x.ensembl_id != "" || y.ensembl_id != ""
+		return isless(x.ensembl_id, y.ensembl_id)
+	end
+	if x.hgnc_id != "" || y.hgnc_id != ""
+		return isless(x.hgnc_id, y.hgnc_id)
+	end
+	# if isless(x.entrez_id, y.entrez_id) return true
+	# elseif x.entrez_id == y.entrez_id && (isless(x.ensembl_id, y.ensembl_id) || isless(x.hgnc_id, y.hgnc_id)) return true
+	# else return false end
 end
 isless(x::Protein, y::Protein) = isless(x.hgnc_id, y.hgnc_id)
 
@@ -190,7 +199,6 @@ misinterpret unconverted DNA as methylated DNA, increasing beta
 values. Probes are often filtered out that have fewer than 3
 cytosines.
 """
-
 mutable struct Methylation <: SingleViewType
 	cgct1::Int64
 	cct1::Int64
@@ -257,11 +265,11 @@ mutable struct ExomeSeq <: VectorViewType
 	nucleotid_change::String
 	variant_confidence::Float64
 	norm_zygosity::String
-	norm_reference_count::Int64
-	norm_variant_count::Int64
+	norm_reference_count::Float64
+	norm_variant_count::Float64
 	tumor_zygosity::String
-	tumor_reference_count::Int64
-	tumor_variant_count::Int64
+	tumor_reference_count::Float64
+	tumor_variant_count::Float64
 	reference_mismatch_avg::Float64
 	variant_mismatch_avg::Float64
 	reference_mismatch_sum::Float64
@@ -270,11 +278,11 @@ mutable struct ExomeSeq <: VectorViewType
 	variant_dist3effective_avg::Float64
 	details::String
 	normalized_value::Float64
-	function ExomeSeq(protein_change::String; reference_mismatch_sum::Float64=0., reference_mismatch_avg::Float64=0., 
+	function ExomeSeq(protein_change::AbstractString; reference_mismatch_sum::Float64=0., reference_mismatch_avg::Float64=0., 
 		reference_dist3effective_avg::Float64=0., variant_mismatch_sum::Float64=0., variant_mismatch_avg::Float64=0., 
-		variant_dist3effective_avg::Float64=0., num_cosmic::Int64=0, variant_effect::String="", nucleotid_change::String="",
-		variant_confidence::Float64=1., norm_zygosity::String="", norm_reference_count::Int64=0, norm_variant_count::Int64=0,
-		tumor_zygosity::String="", tumor_reference_count::Int64=0, tumor_variant_count::Int64=0, details::String="")
+		variant_dist3effective_avg::Float64=0., num_cosmic::Int64=0, variant_effect::AbstractString="", nucleotid_change::AbstractString="",
+		variant_confidence::Float64=1., norm_zygosity::AbstractString="", norm_reference_count::Float64=0., norm_variant_count::Float64=0.,
+		tumor_zygosity::AbstractString="", tumor_reference_count::Float64=0., tumor_variant_count::Float64=0., details::AbstractString="")
 		data_summary = reference_mismatch_avg + variant_mismatch_avg
 						+ reference_mismatch_sum + variant_mismatch_sum
 						+ reference_dist3effective_avg + variant_dist3effective_avg
@@ -343,12 +351,12 @@ struct DataView{K <: KeyType, V <: ViewType}
 	cell_line_id::String
 	key_type::Type{K}
 	view_type::Type{V}
-	used_keys::Set{K}
+	used_keys::SortedSet{K}
 	common_keys::Dict{String, Vector{K}}
 	measurements::Union{Dict{K, V}, MultiDict{K, V}}
-	DataView{K,V}(cell_line_id::String) where {K,V <: SingleViewType} = new(cell_line_id, K, V, Set{K}(), Dict{String, Vector{K}}(), Dict{K,V}())
-	DataView{K,V}(cell_line_id::String) where {K,V <: VectorViewType} = new(cell_line_id, K, V, Set{K}(), Dict{String, Vector{K}}(), MultiDict{K,V}())
-	DataView{K,V}(cell_line_id::String) where {K, V <: NAViewType} = new(cell_line_id, K, V, Set{K}(), Dict{String, Vector{K}}(), Dict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K,V <: SingleViewType} = new(cell_line_id, K, V, SortedSet{K}(), Dict{String, Vector{K}}(), Dict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K,V <: VectorViewType} = new(cell_line_id, K, V, SortedSet{K}(), Dict{String, Vector{K}}(), MultiDict{K,V}())
+	DataView{K,V}(cell_line_id::String) where {K, V <: NAViewType} = new(cell_line_id, K, V, SortedSet{K}(), Dict{String, Vector{K}}(), Dict{K,V}())
 end
 
 
