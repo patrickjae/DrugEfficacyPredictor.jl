@@ -63,9 +63,13 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
     for (t, drug) in enumerate(all_drugs)
+        #init
         dep_base_kernels[drug] = Vector{Matrix{Float64}}()
-        pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
-        cross_kernels[drug] = Vector{Matrix{Float64}}()
+        dep_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
+        grouped_data_kernels[drug] = Vector{Matrix{Float64}}()
+        cross_base_kernels[drug] = Vector{Matrix{Float64}}()
+        cross_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
+        
         result_cell_lines = collect(keys(experiment.results[drug].outcome_values))
         test_result_cell_lines = collect(keys(experiment.test_results[drug].outcome_values))
         # find cell lines for which we have outcomes for the current drug
