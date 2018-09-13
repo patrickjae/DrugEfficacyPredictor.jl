@@ -124,16 +124,20 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     dep = DrugEfficacyPrediction(experiment, T, K, N)
     dep.base_kernels = base_kernels
     dep.pathway_specific_kernels = pathway_specific_kernels
-    for drug in all_drugs
-        # dep.base_kernels[drug] = dep_base_kernels[drug]
-        # dep.pathway_specific_kernels[drug] = dep_pathway_specific_kernels[drug]
-        dep.kernels[drug] = kernels[drug]
-        dep.targets[drug] = targets[drug]
-        # dep.cross_base_kernels[drug] = cross_base_kernels[drug]
-        # dep.cross_pathway_specific_kernels[drug] = cross_pathway_specific_kernels[drug]
-        dep.cross_kernels[drug] = cross_kernels[drug]
-        dep.test_targets[drug] = test_targets[drug]
-    end
+    dep.kernels = kernels
+    dep.cross_kernels = cross_kernels
+    dep.targets = targets
+    dep.test_targets = test_targets
+    # for drug in all_drugs
+    #     # dep.base_kernels[drug] = dep_base_kernels[drug]
+    #     # dep.pathway_specific_kernels[drug] = dep_pathway_specific_kernels[drug]
+    #     dep.kernels[drug] = kernels[drug]
+    #     dep.targets[drug] = targets[drug]
+    #     # dep.cross_base_kernels[drug] = cross_base_kernels[drug]
+    #     # dep.cross_pathway_specific_kernels[drug] = cross_pathway_specific_kernels[drug]
+    #     dep.cross_kernels[drug] = cross_kernels[drug]
+    #     dep.test_targets[drug] = test_targets[drug]
+    # end
     dep
 end
 
@@ -144,9 +148,9 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
     # compute a base kernel for each view, containing all cell lines that are present in all views
     num_views = length(experiment.views)
     @info "computing base kernels"
-    for v_id in 1:num_views
+    for v in experiment.views
         # get views of this type for all cell lines
-        v = experiment.views[v_id]
+        # v = experiment.views[v_id]
         data_views = [map_data_views(cell_lines, v)]
         if cell_lines_test != nothing
             push!(data_views, map_data_views(cell_lines_test, v))
@@ -157,13 +161,12 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
         K += 1
         @info "computing pathway specific kernels..."
         num_pws = length(experiment.pathway_information)
-        ps_kernels = Vector{Matrix{Float64}}(undef, num_pws)
+
+        pathway_specific_kernels[v] = Vector{Matrix{Float64}}()
         tt = 0
-        for p in 1:num_pws
-            pathway = experiment.pathway_information[p]
-            tt += @elapsed ps_kernels[p] = compute_kernel(data_views..., pathway=pathway)
+        for pathway in experiment.pathway_information
+            tt += @elapsed push!(pathway_specific_kernels[v], compute_kernel(data_views..., pathway=pathway))
         end
-        pathway_specific_kernels[v] = ps_kernels
         @info "computing pathway specific kernels for $v took $tt seconds)"
         K += num_pws
     end
