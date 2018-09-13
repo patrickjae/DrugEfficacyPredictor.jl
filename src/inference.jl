@@ -107,6 +107,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 					μ_e=μ_e, 𝜎_e=𝜎_e,
 					μ_a=μ_a, Σ_a=Σ_a,
 					μ_g=μ_g, Σ_g=Σ_g)
+	@info "created model..."
 	all_tasks = collect(keys(dep.experiment.results))
 	kernel_products = Dict{DrugEfficacyPredictor.Drug, Matrix{Float64}}()
 	for (t, d) in enumerate(all_tasks)
@@ -117,7 +118,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		end
 		kernel_products[d] = kp
 	end
-
+	@info "computed kernel products"
 	old_ll = -1e100
 	old_err = 1e100
 	ll = 0.
@@ -128,6 +129,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 	lls = Float64[]
 	errs = Float64[]
 	test_errs = Float64[]
+	@info "entering optimization loop"
 	while err_convergence > convergence_criterion || iter < min_iter
 		ll, err = parameter_inference_step(dep, model, kernel_products, all_tasks)
 		convergence = (old_ll - ll)/old_ll
@@ -149,8 +151,8 @@ end
 
 # actual variational inference algorithm
 function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::PredictionModel, kernel_products::Dict{DrugEfficacyPredictor.Drug, Matrix{Float64}}, all_tasks::Vector{DrugEfficacyPredictor.Drug})
+	@info "entering parameter inference single step"
     cell_lines = collect(values(dep.experiment.cell_lines))
-
 	# @info "compute intermed kernel sums"
 	g_times_kernel = update_intermed_kernel_sum(dep, m)
 	# updates for model parameters in turn
