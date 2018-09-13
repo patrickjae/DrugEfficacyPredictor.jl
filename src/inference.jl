@@ -29,11 +29,13 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 
 	mkpath(joinpath(dest_path,"gridsearch_results"))
 	mkpath(joinpath(dest_path,"gridsearch_charts"))
+	@info "created paths"
 	# Plots.plotlyjs()
 	all_configurations = Vector{Vector{Float64}}()
 	for alpha in gamma_dist_alphas, mu in normal_means, v in normal_vars
 		push!(all_configurations, [alpha, mu, v])
 	end
+	@info "created $(length(all_configurations)) parameter settings"
     # (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, collect(values(dep.experiment.cell_lines)))
     
     K = dep.model.K
@@ -46,8 +48,10 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	f = open(joinpath(dest_path, "errors.txt"), "w")
 	# for alpha in gamma_dist_alphas
 	# 	for mu in normal_means, v in normal_vars
+	@info "starting inference..."
 	Threads.@threads for i in 1:length(all_configurations)
 		(alpha, mu, v) = all_configurations[i]
+		@info "parameter setting $i" alpha mu v
 		try
 			(lls, errs, test_errs) = parameter_inference(dep, convergence_criterion=1e-4, min_iter=10, 
 						⍺_ɣ=alpha, β_ɣ=1. / alpha,
