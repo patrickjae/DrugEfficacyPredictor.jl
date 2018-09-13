@@ -1,5 +1,4 @@
-function test(dep::DrugEfficacyPrediction)
-    m = dep.model
+function test(dep::DrugEfficacyPrediction, m::PredictionModel)
     mse = 0
     test_cell_lines = unique(union(map(outcome -> collect(keys(outcome.outcome_values)), collect(values(dep.experiment.test_results)))))
     # do predictions for all drugs we saw at training time
@@ -38,39 +37,44 @@ function test(dep::DrugEfficacyPrediction)
 end
 
 
-function predict_outcomes(dep::DrugEfficacyPrediction, 
-            cell_lines::Vector{CellLine}, 
-            base_kernels::Union{Nothing, Dict{Type{<:ViewType}, Matrix{Float64}}}=nothing,
-            pathway_specific_kernels::Union{Nothing, Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}}=nothing)
-    m = dep.model
+function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
+            cell_lines::Vector{CellLine})
     predictions = Dict{Drug, Vector{Float64}}()
-    training_cell_lines = collect(values(dep.experiment.cell_lines))  
+    # all cell lines
+    all_cell_lines = collect(values(dep.experiment.cell_lines))
 
-    if base_kernels == nothing || pathway_specific_kernels == nothing
-        (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, training_cell_lines, cell_lines)
 
-        # base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
-        # for v in dep.experiment.views
-        #     dataviews_to_predict = map_data_views(cell_lines, v)
-        #     dataviews_from_training = map_data_views(training_cell_lines, v)
-        #     # dataviews_from_training = map(cl -> cl.views[v], collect(keys(dep.experiment.results[drug].outcome_values)))
-        #     k = compute_kernel(dataviews_from_training, dataviews_to_predict)
-        #     base_kernels[v] = k
-        #     # @info "computed kernels for view $v, num data views to predict: $(length(dataviews_to_predict)), data views in training: $(length(dataviews_from_training)), size of kernel: $(size(k))"
-        # end
-    end
+
+    # if base_kernels == nothing || pathway_specific_kernels == nothing
+    #     (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, training_cell_lines, cell_lines)
+
+    #     # base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
+    #     # for v in dep.experiment.views
+    #     #     dataviews_to_predict = map_data_views(cell_lines, v)
+    #     #     dataviews_from_training = map_data_views(training_cell_lines, v)
+    #     #     # dataviews_from_training = map(cl -> cl.views[v], collect(keys(dep.experiment.results[drug].outcome_values)))
+    #     #     k = compute_kernel(dataviews_from_training, dataviews_to_predict)
+    #     #     base_kernels[v] = k
+    #     #     # @info "computed kernels for view $v, num data views to predict: $(length(dataviews_to_predict)), data views in training: $(length(dataviews_from_training)), size of kernel: $(size(k))"
+    #     # end
+    # end
     # do predictions for all drugs we saw at training time
     for (t, drug) in enumerate(keys(dep.experiment.results))
+        # find cell lines that were used for training
+        training_cell_lines = collect(keys(dep.experiment.results[drug].outcome_values))
+
+        training_set_cell_line_idx = findall((in)(training_cell_lines), all_cell_lines)
+        predict_cell_line_idx = findall((in)(cell_lines), all_cell_lines)
         # compute similarity with all other cell lines in the training set
         kernels = Vector{Matrix{Float64}}()
-        dataviews_from_training_idx = findin(training_cell_lines, collect(keys(dep.experiment.results[drug].outcome_values)))
+        # dataviews_from_training_idx = findin(training_cell_lines, collect(keys(dep.experiment.results[drug].outcome_values)))
 
         for v in dep.experiment.views
             # dataviews_from_training = map(cl -> cl.views[v], collect(keys(dep.experiment.results[drug].outcome_values)))
-            k = base_kernels[v][dataviews_from_training_idx,:]
+            k = base_kernels[v][training_set_cell_line_idx,predict_cell_line_idx]
             push!(kernels, k)
             for pw_kernel in pathway_specific_kernels[v]
-                push!(kernels, pw_kernel[dataviews_from_training_idx,:])
+                push!(kernels, pw_kernel[training_set_cell_line_idx,predict_cell_line_idx])
             end
             # @info "computed kernels for view $v, size of kernel: $(size(k))"
         end
@@ -96,7 +100,7 @@ function predict_outcomes(dep::DrugEfficacyPrediction,
         pred_y_rescaled = pred_y * dep.experiment.results[drug].outcome_std + dep.experiment.results[drug].outcome_mean
         predictions[drug] = pred_y_rescaled
     end
-    (predictions, base_kernels, pathway_specific_kernels)
+    predictions
 end
 
 function write_prediction_file(filename::String, dep::DrugEfficacyPrediction, predictions::Dict{Drug, Vector{Float64}})

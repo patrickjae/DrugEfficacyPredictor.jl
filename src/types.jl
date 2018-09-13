@@ -1,110 +1,5 @@
 ##############################################################################################################
 ##############################################################################################################
-########################################         MODEL         ###############################################
-##############################################################################################################
-##############################################################################################################
-mutable struct PredictionModel
-	# precision parameters, T-dimensional, one per drug/task
-	# ɣ::IsometricPrecisionParameter #precision to b <-- could be a matrix introducing covariance between drugs
-	ɣ::Vector{GammaParameter}
-	# drug specific scalars, T-dimensional
-	b::Vector{NormalParameter}
-
-	# λ::Vector{IsometricPrecisionParameter} #precision to a <-- introduce covariance between cell lines
-	λ::Vector{Vector{GammaParameter}}
-	# drug specific vectors, TxN_t dimensional
-	# a::Vector{Vector{NormalParameter}}
-	a::Vector{MvNormalParameter}
-
-	# ε::IsometricPrecisionParameter #precision to y <-- between drugs
-	ε::Vector{GammaParameter}
-
-	# ν::IsometricPrecisionParameter #precision to g <-- between drugs and views?
-	ν::Vector{GammaParameter}
-	# intermediate results, N_t dimensional, one per drug and view
-	G::Matrix{MvNormalParameter}
-
-	# precision parameter, K-dimensional, one per view
-	# ⍵::IsometricPrecisionParameter
-	⍵::Vector{GammaParameter}
-	# view specific scalars, K-dimensional
-	e::Vector{NormalParameter}
-
-	T::Int64
-	K::Int64
-	N::Vector{Int64}
-	
-	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64};
-					⍺_ɣ::Float64=1e-3, β_ɣ::Float64=1e3,
-					⍺_λ::Float64=1e-3, β_λ::Float64=1e3,
-					⍺_ε::Float64=1e-3, β_ε::Float64=1e3,
-					⍺_ν::Float64=1e-3, β_ν::Float64=1e3,
-					⍺_⍵::Float64=1e-3, β_⍵::Float64=1e3,
-					μ_b::Float64=0., 𝜎_0::Float64=20.,
-					μ_e::Float64=1., 𝜎_e::Float64=2.,
-					μ_a::Float64=1., Σ_a::Float64=2.,
-					μ_g::Float64=0., Σ_g::Float64=20.)
-		p = new()
-		p.T = T
-		p.K = K
-		p.N = N
-
-		p.ɣ = VectorGammaParameter(undef, T)
-		p.b = Vector{NormalParameter}(undef, T)
-		for t in 1:T
-			p.ɣ[t] = GammaParameter(⍺_ɣ, β_ɣ)
-			p.b[t] = NormalParameter(μ_b, 𝜎_0)
-			set_variable_name(p.ɣ[t], "ɣ[$t]")
-			set_variable_name(p.b[t], "b[$t]")
-		end
-
-		p.λ = Vector{VectorGammaParameter}(undef, T)
-		# p.a = Vector{Vector{NormalParameter}}(T)
-		p.a = Vector{MvNormalParameter}(undef, T)
-		for t in 1:T
-			p.λ[t] = VectorGammaParameter(undef, N[t])
-			p.a[t] = MvNormalParameter(μ_a, Σ_a, N[t])
-			# p.a[t] = Vector{NormalParameter}(N[t])
-			set_variable_name(p.a[t], "a[$t]")
-			for n in 1:N[t]
-				p.λ[t][n] = GammaParameter(⍺_λ, β_λ)
-				set_variable_name(p.ɣ[t], "λ[$t][$n]")
-				# p.a[t][n] = NormalParameter(m_0, s_0)
-			end
-		end
-
-		p.ε = VectorGammaParameter(undef, T)
-		for t in 1:T
-			p.ε[t] = GammaParameter(⍺_ε, β_ε)
-			set_variable_name(p.ε[t], "ε[$t]")
-		end
-
-		p.ν = VectorGammaParameter(undef, T)
-		for t in 1:T
-			p.ν[t] = GammaParameter(⍺_ν, β_ν)
-			set_variable_name(p.ν[t], "ν[$t")
-		end
-		p.G = Matrix{MvNormalParameter}(undef, T, K)
-		for t in 1:T, k in 1:K
-			p.G[t,k] = MvNormalParameter(μ_g, Σ_g, N[t])
-			set_variable_name(p.G[t,k], "G[$t,$k]")
-		end
-
-		p.⍵ = VectorGammaParameter(undef, K)
-		p.e = Vector{NormalParameter}(undef, K)
-		for k in 1:K
-			p.⍵[k] = GammaParameter(⍺_⍵, β_⍵)
-			p.e[k] = NormalParameter(μ_e, 𝜎_e)
-			set_variable_name(p.⍵[k], "⍵[$k]")
-			set_variable_name(p.e[k], "e[$k]")
-		end
-		p
-	end
-end
-
-
-##############################################################################################################
-##############################################################################################################
 ########################################         DATA          ###############################################
 ##############################################################################################################
 ##############################################################################################################
@@ -439,25 +334,136 @@ end
 ##############################################################################################################
 mutable struct DrugEfficacyPrediction
 	experiment::Experiment
-	model::PredictionModel
-	base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
-	pathway_specific_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	base_kernels::OrderedDict{Type{<:ViewType}, Matrix{Float64}}()
+	pathway_specific_kernels::OrderedDict{Type{<:ViewType}, Matrix{Float64}}()
 	targets::OrderedDict{Drug, Vector{Float64}}
-	cross_base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
-	cross_pathway_specific_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	cross_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	# cross_base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	# cross_pathway_specific_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	test_targets::OrderedDict{Drug, Vector{Float64}}
 	continuous_kernel::Function
 	discrete_kernel::Function
-	function DrugEfficacyPrediction(experiment::Experiment, model::PredictionModel) 
+	T::Int64
+	K::Int64
+	N::Vector{Int64}
+	function DrugEfficacyPrediction(experiment::Experiment, T::Int64, K::Int64, N::Vector{Int64}) 
 		new(
 			experiment, 
-			model,
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Float64}}(),
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
-			OrderedDict{Drug, Vector{Float64}}()
+			OrderedDict{Drug, Vector{Float64}}(),
+			T, K, N
 		)
+	end
+end
+
+##############################################################################################################
+##############################################################################################################
+########################################         MODEL         ###############################################
+##############################################################################################################
+##############################################################################################################
+mutable struct PredictionModel
+	# precision parameters, T-dimensional, one per drug/task
+	# ɣ::IsometricPrecisionParameter #precision to b <-- could be a matrix introducing covariance between drugs
+	ɣ::Vector{GammaParameter}
+	# drug specific scalars, T-dimensional
+	b::Vector{NormalParameter}
+
+	# λ::Vector{IsometricPrecisionParameter} #precision to a <-- introduce covariance between cell lines
+	λ::Vector{Vector{GammaParameter}}
+	# drug specific vectors, TxN_t dimensional
+	# a::Vector{Vector{NormalParameter}}
+	a::Vector{MvNormalParameter}
+
+	# ε::IsometricPrecisionParameter #precision to y <-- between drugs
+	ε::Vector{GammaParameter}
+
+	# ν::IsometricPrecisionParameter #precision to g <-- between drugs and views?
+	ν::Vector{GammaParameter}
+	# intermediate results, N_t dimensional, one per drug and view
+	G::Matrix{MvNormalParameter}
+
+	# precision parameter, K-dimensional, one per view
+	# ⍵::IsometricPrecisionParameter
+	⍵::Vector{GammaParameter}
+	# view specific scalars, K-dimensional
+	e::Vector{NormalParameter}
+
+	T::Int64
+	K::Int64
+	N::Vector{Int64}
+
+	dep::DrugEfficacyPrediction
+	
+	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64}, dep::DrugEfficacyPrediction;
+					⍺_ɣ::Float64=1e-3, β_ɣ::Float64=1e3,
+					⍺_λ::Float64=1e-3, β_λ::Float64=1e3,
+					⍺_ε::Float64=1e-3, β_ε::Float64=1e3,
+					⍺_ν::Float64=1e-3, β_ν::Float64=1e3,
+					⍺_⍵::Float64=1e-3, β_⍵::Float64=1e3,
+					μ_b::Float64=0., 𝜎_0::Float64=20.,
+					μ_e::Float64=1., 𝜎_e::Float64=2.,
+					μ_a::Float64=1., Σ_a::Float64=2.,
+					μ_g::Float64=0., Σ_g::Float64=20.)
+		p = new()
+		p.dep = dep
+		p.T = dep.T
+		p.K = dep.K
+		p.N = dep.N
+
+		p.ɣ = VectorGammaParameter(undef, T)
+		p.b = Vector{NormalParameter}(undef, T)
+		for t in 1:T
+			p.ɣ[t] = GammaParameter(⍺_ɣ, β_ɣ)
+			p.b[t] = NormalParameter(μ_b, 𝜎_0)
+			set_variable_name(p.ɣ[t], "ɣ[$t]")
+			set_variable_name(p.b[t], "b[$t]")
+		end
+
+		p.λ = Vector{VectorGammaParameter}(undef, T)
+		# p.a = Vector{Vector{NormalParameter}}(T)
+		p.a = Vector{MvNormalParameter}(undef, T)
+		for t in 1:T
+			p.λ[t] = VectorGammaParameter(undef, N[t])
+			p.a[t] = MvNormalParameter(μ_a, Σ_a, N[t])
+			# p.a[t] = Vector{NormalParameter}(N[t])
+			set_variable_name(p.a[t], "a[$t]")
+			for n in 1:N[t]
+				p.λ[t][n] = GammaParameter(⍺_λ, β_λ)
+				set_variable_name(p.ɣ[t], "λ[$t][$n]")
+				# p.a[t][n] = NormalParameter(m_0, s_0)
+			end
+		end
+
+		p.ε = VectorGammaParameter(undef, T)
+		for t in 1:T
+			p.ε[t] = GammaParameter(⍺_ε, β_ε)
+			set_variable_name(p.ε[t], "ε[$t]")
+		end
+
+		p.ν = VectorGammaParameter(undef, T)
+		for t in 1:T
+			p.ν[t] = GammaParameter(⍺_ν, β_ν)
+			set_variable_name(p.ν[t], "ν[$t")
+		end
+		p.G = Matrix{MvNormalParameter}(undef, T, K)
+		for t in 1:T, k in 1:K
+			p.G[t,k] = MvNormalParameter(μ_g, Σ_g, N[t])
+			set_variable_name(p.G[t,k], "G[$t,$k]")
+		end
+
+		p.⍵ = VectorGammaParameter(undef, K)
+		p.e = Vector{NormalParameter}(undef, K)
+		for k in 1:K
+			p.⍵[k] = GammaParameter(⍺_⍵, β_⍵)
+			p.e[k] = NormalParameter(μ_e, 𝜎_e)
+			set_variable_name(p.⍵[k], "⍵[$k]")
+			set_variable_name(p.e[k], "e[$k]")
+		end
+		p
 	end
 end

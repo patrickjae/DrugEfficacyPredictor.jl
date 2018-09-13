@@ -42,9 +42,9 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     # dep_base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
     # dep_pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
     # grouped_data_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
-    dep_base_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
-    dep_pathway_specific_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
-    grouped_data_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
+    # dep_base_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
+    # dep_pathway_specific_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
+    # grouped_data_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
 
     cell_lines = collect(values(experiment.cell_lines))
     # find cell lines that are present in all views, i.e. we need all data views for a cell line
@@ -58,18 +58,21 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
     targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
-    cross_base_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
-    cross_pathway_specific_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    cross_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    # cross_base_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    # cross_pathway_specific_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
     test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
     for (t, drug) in enumerate(all_drugs)
         #init
-        dep_base_kernels[drug] = Vector{Matrix{Float64}}()
-        dep_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
-        grouped_data_kernels[drug] = Vector{Matrix{Float64}}()
-        cross_base_kernels[drug] = Vector{Matrix{Float64}}()
-        cross_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
-        
+        # dep_base_kernels[drug] = Vector{Matrix{Float64}}()
+        # dep_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
+        # grouped_data_kernels[drug] = Vector{Matrix{Float64}}()
+        # cross_base_kernels[drug] = Vector{Matrix{Float64}}()
+        # cross_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
+        kernels[drug] = Vector{Matrix{Float64}}()
+        cross_kernels[drug] = Vector{Matrix{Float64}}()
+
         result_cell_lines = collect(keys(experiment.results[drug].outcome_values))
         test_result_cell_lines = collect(keys(experiment.test_results[drug].outcome_values))
         # find cell lines for which we have outcomes for the current drug
@@ -95,12 +98,16 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
             # @info "view $v: $(length(idx_in_outcome)), overall: $(length(idx2)), N[t]: $(model.N[t])"
 
             # add base kernel restricted to cell lines for which we have outcome
-            push!(dep_base_kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
-            push!(cross_base_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
+            # push!(dep_base_kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
+            # push!(cross_base_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
+            push!(kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
+            push!(cross_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
 
             for pw_kernel in pathway_specific_kernels[v]
-                push!(dep_pathway_specific_kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
-                push!(cross_pathway_specific_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
+                # push!(dep_pathway_specific_kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
+                # push!(cross_pathway_specific_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
+                push!(kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
+                push!(cross_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
             end
         end
         # compute additional kernels
@@ -113,14 +120,18 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
         # test outcomes, not normalized
         test_targets[drug] = collect(values(experiment.test_results[drug].outcome_values))[idx_in_test_outcome]
     end
-    pm = PredictionModel(T, K, N)
-    dep = DrugEfficacyPrediction(experiment, pm)
+    # pm = PredictionModel(T, K, N)
+    dep = DrugEfficacyPrediction(experiment, T, K, N)
+    dep.base_kernels = base_kernels
+    dep.pathway_specific_kernels = pathway_specific_kernels
     for drug in all_drugs
-        dep.base_kernels[drug] = dep_base_kernels[drug]
-        dep.pathway_specific_kernels[drug] = dep_pathway_specific_kernels[drug]
+        # dep.base_kernels[drug] = dep_base_kernels[drug]
+        # dep.pathway_specific_kernels[drug] = dep_pathway_specific_kernels[drug]
+        dep.kernels[drug] = kernels[drug]
         dep.targets[drug] = targets[drug]
-        dep.cross_base_kernels[drug] = cross_base_kernels[drug]
-        dep.cross_pathway_specific_kernels[drug] = cross_pathway_specific_kernels[drug]
+        # dep.cross_base_kernels[drug] = cross_base_kernels[drug]
+        # dep.cross_pathway_specific_kernels[drug] = cross_pathway_specific_kernels[drug]
+        dep.cross_kernels[drug] = cross_kernels[drug]
         dep.test_targets[drug] = test_targets[drug]
     end
     dep
