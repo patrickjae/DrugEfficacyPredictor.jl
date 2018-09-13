@@ -336,7 +336,7 @@ mutable struct DrugEfficacyPrediction
 	experiment::Experiment
 	kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	base_kernels::OrderedDict{Type{<:ViewType}, Matrix{Float64}}
-	pathway_specific_kernels::OrderedDict{Type{<:ViewType}, Matrix{Float64}}
+	pathway_specific_kernels::OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}
 	targets::OrderedDict{Drug, Vector{Float64}}
 	cross_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	# cross_base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
@@ -352,7 +352,7 @@ mutable struct DrugEfficacyPrediction
 			experiment, 
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(),
 			OrderedDict{Type{<:ViewType}, Matrix{Float64}}(),
-			OrderedDict{Type{<:ViewType}, Matrix{Float64}}(),
+			OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}(),
 			# OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Float64}}(),
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 

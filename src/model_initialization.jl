@@ -138,8 +138,8 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
 end
 
 function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine}, cell_lines_test::Union{Vector{CellLine}, Nothing}=nothing)
-    base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
-    pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
+    base_kernels = OrderedDict{Type{<:ViewType}, Matrix{Float64}}()
+    pathway_specific_kernels = OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
     K = 0
     # compute a base kernel for each view, containing all cell lines that are present in all views
     num_views = length(experiment.views)
