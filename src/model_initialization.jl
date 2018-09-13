@@ -39,9 +39,13 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     all_drugs = collect(keys(experiment.results)) # the tasks
 
     # compute base kernels between cell lines once, one for each ViewType
-    dep_base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
-    dep_pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
-    grouped_data_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
+    # dep_base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
+    # dep_pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
+    # grouped_data_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
+    dep_base_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
+    dep_pathway_specific_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
+    grouped_data_kernels = Dict{Drug, Vector{Matrix{Float64}}}()
+
     cell_lines = collect(values(experiment.cell_lines))
     # find cell lines that are present in all views, i.e. we need all data views for a cell line
     cell_lines_in_views = filter(cl -> length(cl.views) == length(experiment.views), cell_lines)
