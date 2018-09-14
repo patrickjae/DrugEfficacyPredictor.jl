@@ -51,8 +51,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	# for alpha in gamma_dist_alphas
 	# 	for mu in normal_means, v in normal_vars
 	@info "starting inference"
-	# Threads.@threads
-	for i in 1:length(all_configurations)
+	Threads.@threads for i in 1:length(all_configurations)
 		(alpha, mu, v) = all_configurations[i]
 		@info "parameter setting $i" alpha mu v
 		try
