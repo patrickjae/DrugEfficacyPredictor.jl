@@ -411,7 +411,6 @@ mutable struct PredictionModel
 					μ_e::Float64=1., 𝜎_e::Float64=2.,
 					μ_a::Float64=1., Σ_a::Float64=2.,
 					μ_g::Float64=0., Σ_g::Float64=20.)
-		@info "constructing prediction model"
 		p = new()
 		p.T = T
 		p.K = K
