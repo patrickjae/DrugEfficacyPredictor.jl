@@ -62,6 +62,8 @@ server = nothing
 
 create_http_handler() = HTTP.Handlers.HandlerFunction(handle_request)
 
+import Base.close
+
 close(server::HTTP.Server) = put!(server.in, HTTP.Servers.KILL)
 
 
