@@ -13,7 +13,7 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::P
 		y_cov = 1. / expected_value(m.ε[t])
 		actual_outcomes = dep.targets[drug]
 		# @info "######### Drug $(drug.id) #########" target_ranking=sortperm(dep.targets[drug]) prediction_ranking=sortperm(y_mean) prediction_variance=y_cov gamma=expected_value(m.ɣ[t]) epsilon=expected_value(m.ε[t]) nu=expected_value(m.ν[t])
-		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov.*eye(m.N[t])), actual_outcomes)
+		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov.*Matrix(I, m.N[t], m.N[t])), actual_outcomes)
 		mse += sum((actual_outcomes .- y_mean).^2)/m.N[t]
 	end
 	# @info view_weights=expected_value.(m.e)
@@ -261,7 +261,7 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 			# NOTE: alter prior to allow correlations between cell lines, i.e. have a matrix prior on nu
 			exp_e = expected_value(m.e[k])
 			exp_g_sum -= expected_value(m.G[t,k])*exp_e
-			m.G[t,k].variational_covariance = eye(m.N[t]) .* 1. / (2*expected_value(m.ε[t])*expected_squared_value(m.e[k]) + expected_value(m.ν[t]))
+			m.G[t,k].variational_covariance = Matrix(I, m.N[t], m.N[t]) .* 1. / (2*expected_value(m.ε[t])*expected_squared_value(m.e[k]) + expected_value(m.ν[t]))
 
 			eta1 = expected_value(m.ν[t]).*kernel*expected_value(m.a[t]) + expected_value(m.ε[t])*exp_e*(dep.targets[drug] .- expected_value(m.b[t]) - exp_g_sum)
 			m.G[t,k].variational_mean = m.G[t,k].variational_covariance*eta1
