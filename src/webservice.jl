@@ -13,7 +13,7 @@ function handle_request(req::HTTP.Request)
     if endswith(target, "stop")
         req.response.status = 200
         req.response.body = JSON.json(Dict("status" => "success", "message" => "Server has been shut down."))
-        close(server)
+        stop_server(server)
         return req.response
     end
 
@@ -62,9 +62,7 @@ server = nothing
 
 create_http_handler() = HTTP.Handlers.HandlerFunction(handle_request)
 
-import Base.close
-
-close(server::HTTP.Server) = put!(server.in, HTTP.Servers.KILL)
+stop_server(server::HTTP.Server) = put!(server.in, HTTP.Servers.KILL)
 
 
 function start_server(port::Int64)
@@ -72,6 +70,6 @@ function start_server(port::Int64)
 	try 
 		HTTP.serve(server, "127.0.0.1", port)
 	finally
-		close(server)
+		stop_server(server)
 	end	
 end
