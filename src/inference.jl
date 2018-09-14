@@ -35,8 +35,8 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	@info "created paths"
 	# Plots.plotlyjs()
 	all_configurations = Vector{Vector{Float64}}()
-	for alpha in gamma_dist_alphas, mu in normal_means, v in normal_vars
-		push!(all_configurations, [alpha, mu, v])
+	for alpha in gamma_dist_alphas, beta in gamma_dist_betas, mu in normal_means, v in normal_vars
+		push!(all_configurations, [alpha, beta, mu, v])
 	end
 	@info "created $(length(all_configurations)) parameter settings"
     # (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, collect(values(dep.experiment.cell_lines)))
@@ -51,16 +51,17 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	# for alpha in gamma_dist_alphas
 	# 	for mu in normal_means, v in normal_vars
 	@info "starting inference"
-	Threads.@threads for i in 1:length(all_configurations)
-		(alpha, mu, v) = all_configurations[i]
-		@info "parameter setting $i" alpha mu v
+	# Threads.@threads 
+	for i in 1:length(all_configurations)
+		(alpha, beta, mu, v) = all_configurations[i]
+		@info "parameter setting $i" alpha beta mu v
 		try
 			(lls, errs, test_errs, model) = parameter_inference(dep, convergence_criterion=1e-4, min_iter=10, 
-						⍺_ɣ=alpha, β_ɣ=1. / alpha,
-						⍺_λ=alpha, β_λ=1. / alpha,
-						⍺_ε=alpha, β_ε=1. / alpha,
-						⍺_ν=alpha, β_ν=1. / alpha,
-						⍺_⍵=alpha, β_⍵=1. / alpha,
+						⍺_ɣ=alpha, β_ɣ=beta,
+						⍺_λ=alpha, β_λ=beta,
+						⍺_ε=alpha, β_ε=beta,
+						⍺_ν=alpha, β_ν=beta,
+						⍺_⍵=alpha, β_⍵=beta,
 						μ_b=mu, 𝜎_0=v,
 						μ_e=mu, 𝜎_e=v,
 						μ_a=mu, Σ_a=v,
