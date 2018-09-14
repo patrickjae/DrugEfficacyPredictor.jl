@@ -21,14 +21,14 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::P
 end
 
 function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path::String="results")
-	# gamma_dist_alphas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
-	# gamma_dist_betas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
-	# normal_means = [-1., 0., 1.]
-	# normal_vars = [1., 2., 5.]
-	gamma_dist_alphas = [1e-3]
-	gamma_dist_betas = [1e-3]
-	normal_means = [0.]
-	normal_vars = [1.]
+	gamma_dist_alphas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
+	gamma_dist_betas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
+	normal_means = [-1., 0., 1.]
+	normal_vars = [1., 2., 5.]
+	# gamma_dist_alphas = [1e-3]
+	# gamma_dist_betas = [1e-3]
+	# normal_means = [0.]
+	# normal_vars = [1.]
 
 	mkpath(joinpath(dest_path,"gridsearch_results"))
 	mkpath(joinpath(dest_path,"gridsearch_charts"))
