@@ -186,7 +186,7 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 		# b
 		ε_expected = expected_value(m.ε[t])
 		m.b[t].variational_variance = 1. / (expected_value(m.ɣ[t]) + ε_expected*m.N[t])
-		m.b[t].variational_mean = m.b[t].variational_variance*ε_expected*sum(dep.targets[drug] - exp_gte)
+		m.b[t].variational_mean = m.b[t].variational_variance*ε_expected*sum(dep.targets[drug] .- exp_gte)
 		# @info b[t]=expected_value(m.b[t])
 		ll += elbo(m.b[t])
 
@@ -267,7 +267,7 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 			exp_g_sum -= expected_value(m.G[t,k])*exp_e
 			m.G[t,k].variational_covariance = Matrix(I, m.N[t], m.N[t]) .* 1. / (2*expected_value(m.ε[t])*expected_squared_value(m.e[k]) + expected_value(m.ν[t]))
 
-			eta1 = expected_value(m.ν[t]).*kernel*expected_value(m.a[t]) + expected_value(m.ε[t])*exp_e*(dep.targets[drug] .- expected_value(m.b[t]) - exp_g_sum)
+			eta1 = expected_value(m.ν[t]).*kernel*expected_value(m.a[t]) + expected_value(m.ε[t])*exp_e*(dep.targets[drug] .- expected_value(m.b[t]) .- exp_g_sum)
 			m.G[t,k].variational_mean = m.G[t,k].variational_covariance*eta1
 			ll += elbo(m.G[t,k])
 			exp_g_sum += expected_value(m.G[t,k])*exp_e
