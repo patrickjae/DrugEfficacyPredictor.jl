@@ -401,7 +401,7 @@ mutable struct PredictionModel
 	K::Int64
 	N::Vector{Int64}
 
-	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64}, dep::DrugEfficacyPrediction;
+	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64};
 					⍺_ɣ::Float64=1e-3, β_ɣ::Float64=1e3,
 					⍺_λ::Float64=1e-3, β_λ::Float64=1e3,
 					⍺_ε::Float64=1e-3, β_ε::Float64=1e3,
@@ -413,9 +413,9 @@ mutable struct PredictionModel
 					μ_g::Float64=0., Σ_g::Float64=20.)
 		@info "constructing prediction model"
 		p = new()
-		p.T = dep.T
-		p.K = dep.K
-		p.N = dep.N
+		p.T = T
+		p.K = K
+		p.N = N
 
 		p.ɣ = VectorGammaParameter(undef, T)
 		p.b = Vector{NormalParameter}(undef, T)

@@ -44,11 +44,11 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
     all_errors = Vector{String}(undef, length(all_configurations))
 
     # idx = Threads.Atomic{Int64}(1)
-	f = open(joinpath(dest_path, "errors.txt"), "w")
 	# for alpha in gamma_dist_alphas
 	# 	for mu in normal_means, v in normal_vars
 	@info "starting inference"
-	Threads.@threads for i in 1:length(all_configurations)
+	# Threads.@threads
+	for i in 1:length(all_configurations)
 		(alpha, mu, v) = all_configurations[i]
 		@info "parameter setting $i" alpha mu v
 		try
@@ -77,6 +77,8 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 			# @warn "Exception occurred" exc alpha mu variance=v
 		end
 	end
+
+	f = open(joinpath(dest_path, "errors.txt"), "w")
 	for s in all_errors
 		@printf(f, "%s", s)
 	end
