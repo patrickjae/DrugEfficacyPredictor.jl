@@ -8,7 +8,7 @@ function test(dep::DrugEfficacyPrediction, m::PredictionModel)
         training_drug_outcome = dep.experiment.results[drug]
 
         # TODO: check if we need to test for drug, i.e. if we have test_result for it
-        G = Vector{Vector{Float64}}(length(dep.cross_kernels[drug]))
+        G = Vector{Vector{Float64}}(undef, length(dep.cross_kernels[drug]))
         exp_a = expected_value(m.a[t])
         for (k, c_kernel) in enumerate(dep.cross_kernels[drug])
             G[k] = c_kernel * exp_a
