@@ -97,6 +97,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 					μ_a::Float64=0., Σ_a::Float64=20.,
 					μ_g::Float64=0., Σ_g::Float64=20.)
 	# Plots.plotly()
+	@info "creating model"
 	model = DrugEfficacyPredictor.PredictionModel(dep.T, dep.K, dep.N,
 					⍺_ɣ=⍺_ɣ, β_ɣ=β_ɣ,
 					⍺_λ=⍺_λ, β_λ=β_λ,
@@ -107,7 +108,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 					μ_e=μ_e, 𝜎_e=𝜎_e,
 					μ_a=μ_a, Σ_a=Σ_a,
 					μ_g=μ_g, Σ_g=Σ_g)
-	@info "created model..."
+	@info "created model"
 	all_tasks = collect(keys(dep.experiment.results))
 	kernel_products = Dict{DrugEfficacyPredictor.Drug, Matrix{Float64}}()
 	for (t, d) in enumerate(all_tasks)
