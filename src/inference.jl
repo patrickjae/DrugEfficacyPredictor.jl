@@ -79,6 +79,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 		catch exc
 			# display(stacktrace(catch_backtrace()))
 			@warn "Exception occurred" exc alpha mu variance=v
+			break
 		end
 	end
 
