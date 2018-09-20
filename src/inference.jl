@@ -66,7 +66,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 						μ_e=mu, 𝜎_e=v,
 						μ_a=mu, Σ_a=v,
 						μ_g=mu, Σ_g=v)
-			all_errors[i] = @sprintf("%f\t%f\t%f\t%f\t%f\t%f\n", alpha, mu, v, errs[end], test_errs[end], lls[end])
+			all_errors[i] = @sprintf("%f\t%f\t%f\t%f\t%f\t%f\t%f\n", alpha, beta, mu, v, errs[end], test_errs[end], lls[end])
 			# @printf(f, "%f\t%f\t%f\t%f\t%f\n", alpha, mu, v, errs[end], test_errs[end])
 			# flush(f)
 			# p = Plots.plot(title="alpha = $alpha, mu = $mu, variance = $v")
@@ -78,7 +78,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 			# @info "Processed settings:" alpha mu variance=v training_error=errs[end] test_error=test_errs[end]
 		catch exc
 			# display(stacktrace(catch_backtrace()))
-			# @warn "Exception occurred" exc alpha mu variance=v
+			@warn "Exception occurred" exc alpha mu variance=v
 		end
 	end
 
