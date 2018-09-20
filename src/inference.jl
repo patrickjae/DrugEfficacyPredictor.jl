@@ -23,11 +23,11 @@ end
 function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path::String="results")
 	gamma_dist_alphas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
 	gamma_dist_betas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
-	normal_means = [-1., 0., 1.]
+	# normal_means = [-1., 0., 1.]
 	normal_vars = [1., 2., 5.]
 	# gamma_dist_alphas = [1e-3]
 	# gamma_dist_betas = [1e-3]
-	# normal_means = [0.]
+	normal_means = [0.]
 	# normal_vars = [1.]
 
 	mkpath(joinpath(dest_path,"gridsearch_results"))
@@ -138,7 +138,6 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		ll, err = parameter_inference_step(dep, model, kernel_products, all_tasks)
 		convergence = (old_ll - ll)/old_ll
 		err_convergence = (old_err - err)/old_err
-		# @info current_likelihood=ll current_error=err convergence error_convergence=err_convergence
 		# break
 		old_ll = ll
 		old_err = err
@@ -147,6 +146,7 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		push!(errs,err)
 		(test_err, _, _) = test(dep, model)
 		push!(test_errs, test_err)
+		@info "inference stats" current_likelihood=ll current_error=err test_error=test_err convergence error_convergence=err_convergence
 	end
 	# println("highest log likelihood at iteration $(sortperm(lls, rev=true)[1])")
 	# println("lowest error at iteration $(sortperm(errs)[1])")
