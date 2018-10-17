@@ -6,40 +6,34 @@ end
 
 function to_json(data::Experiment)
     response = Dict{String, Any}()
-    response["results"] = Vector{Dict{String, Any}}()
-    for (_, outcome) in data.results
-        push!(response["results"], to_json(outcome))
-    end
-    response["test_results"] = Vector{String, Any}()
-    for (_, test_outcome) in data.rest_results
-        push!(response["test_results"], to_json(test_outcome))
-    end
-    response["cell_lines"] = Vector{Dict{String, Any}}()
-    for cl in collect(values(data.cell_lines))
-        push!(response["cell_lines"], to_json(cl))
-    end
-    response["drugs"] = Vector{Dict{String, Any}}()
-    for drug in collect(values(data.drugs))
-        push!(response["drugs"], to_json(drug))
-    end
-    response["genes"] = Vector{Dict{String, Any}}()
-    all_genes = union(collect(values(data.genes)), collect(values(data.genes_by_hgnc)), collect(values(data.genes_by_ensembl)))
-    for gene in all_genes
-        push!(response["genes"], to_json(gene))
-    end
-    response["proteins"] = Vector{Dict{String, Any}}()
-    for protein in collect(values(data.proteins))
-        push!(response["proteins"], to_json(protein))
-    end
+    response["results"] = to_json(collect(values(data.results)))
+    response["test_results"] = to_json(collect(values(data.test_results)))
+    response["cell_lines"] = to_json(collect(values(data.cell_lines)))
+    response["drugs"] = to_json(collect(values(data.drugs)))
+    response["genes"] = to_json(union(collect(values(experiment.genes)), collect(values(experiment.genes_by_hgnc)), collect(values(experiment.genes_by_ensembl))))
+    response["proteins"] = to_json(data.proteins)
     response["views"] = map(v -> string(v), data.views)
-    response["pathways"] = Vector{Dict{String, Any}}()
-    for pw in data.pathway_information
-        push!(response["pathways"], to_json(pw))
-    end
+    response["pathways"] = to_json(data.pathway_information)
     response
 end
 
-function to_json(data::CellLine)
+function to_json(data::Vector{Any})
+    ret = Vector{Dict{String, Any}}()
+    for obj in data
+        push!(ret, to_json(obj))
+    end
+    ret
+end
+
+#aliases
+cell_lines_to_json(data::Experiment) = to_json(collect(values(data.cell_lines)))
+drugs_to_json(data::Experiment) = to_json(collect(values(data.drugs)))
+genes_to_json(data::Experiment) = to_json(union(collect(values(experiment.genes)), collect(values(experiment.genes_by_hgnc)), collect(values(experiment.genes_by_ensembl))))
+proteins_to_json(data::Experiment) = to_json(data.proteins)
+pathways_to_json(data::Experiment) = to_json(data.pathway_information)
+
+
+function to_json(data::CellLine) 
     response = Dict{String, Any}()
     response["id"] = data.id
     response["cancer_type"] = data.cancer_type
