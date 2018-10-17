@@ -78,11 +78,19 @@ function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
             end
             # @info "computed kernels for view $v, size of kernel: $(size(k))"
         end
-        # TODO: compute kernel combinations
+
+        gene_expression = dep.base_kernels[GeneExpression][training_set_cell_line_idx, predict_cell_line_idx]
+        methylation = dep.base_kernels[Methylation][training_set_cell_line_idx, predict_cell_line_idx]
+        cnv = dep.base_kernels[CNV][training_set_cell_line_idx, predict_cell_line_idx]
+
+        push!(kernels, gene_expression .* methylation)
+        push!(kernels, gene_expression .* cnv)
+        push!(kernels, cnv .* methylation)
+        push!(kernels, gene_expression .* methylation .* cnv)
 
         a_expected = expected_value(m.a[t])
 
-        G = Vector{Vector{Float64}}(length(kernels))
+        G = Vector{Vector{Float64}}(undef, length(kernels))
         exp_a = expected_value(m.a[t])
         for (k, kernel) in enumerate(kernels)
             G[k] = kernel' * exp_a
@@ -95,7 +103,7 @@ function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
         # println("G: $(size(G)), Gs: $(size.(G))")
         e_expected = expected_value.(m.e)
         # println("e: $(size(e_expected)), e type: $(typeof(e_expected)), $e_expected")
-        pred_y = sum(G .* e_expected) + expected_value(m.b[t])
+        pred_y = sum(G .* e_expected) .+ expected_value(m.b[t])
         # rescale the normalized prediction
         pred_y_rescaled = pred_y * dep.experiment.results[drug].outcome_std + dep.experiment.results[drug].outcome_mean
         predictions[drug] = pred_y_rescaled

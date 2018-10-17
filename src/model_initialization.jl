@@ -112,14 +112,31 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
         end
         # compute additional kernels
         # grouped kernels
-        for v in experiment.views
+        gene_expression = base_kernels[GeneExpression][idx_in_cell_lines, idx_in_cell_lines]
+        methylation = base_kernels[Methylation][idx_in_cell_lines, idx_in_cell_lines]
+        cnv = base_kernels[CNV][idx_in_cell_lines, idx_in_cell_lines]
 
-        end
+        push!(kernels[drug], gene_expression .* methylation)
+        push!(kernels[drug], gene_expression .* cnv)
+        push!(kernels[drug], cnv .* methylation)
+        push!(kernels[drug], gene_expression .* methylation .* cnv)
+
+        cross_gene_expression = base_kernels[GeneExpression][test_idx_in_cell_lines, idx_in_cell_lines]
+        cross_methylation = base_kernels[Methylation][test_idx_in_cell_lines, idx_in_cell_lines]
+        cross_cnv = base_kernels[CNV][test_idx_in_cell_lines, idx_in_cell_lines]
+
+        push!(cross_kernels[drug], cross_gene_expression .* cross_methylation)
+        push!(cross_kernels[drug], cross_gene_expression .* cross_cnv)
+        push!(cross_kernels[drug], cross_cnv .* cross_methylation)
+        push!(cross_kernels[drug], cross_gene_expression .* cross_methylation .* cross_cnv)
+
         #normalize the outcome data data for each drug across the cell lines
         targets[drug] = ((collect(values(experiment.results[drug].outcome_values))[idx_in_outcome] .- experiment.results[drug].outcome_mean)./experiment.results[drug].outcome_std)
         # test outcomes, not normalized
         test_targets[drug] = collect(values(experiment.test_results[drug].outcome_values))[idx_in_test_outcome]
     end
+    # accommodate for additional mixed kernels
+    K += 4
     # pm = PredictionModel(T, K, N)
     dep = DrugEfficacyPrediction(experiment, T, K, N)
     dep.base_kernels = base_kernels
