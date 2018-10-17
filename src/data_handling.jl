@@ -185,7 +185,8 @@ get_measurement_value(d::DataView{T, <:ViewType}, subject::T) where {T<:KeyType}
 get_measurement_value(ds::Vector{<:ViewType}) = get_measurement_value.(ds)
 
 function get_measurement_value(d::ExomeSeq)
-	(d.reference_mismatch_sum + d.variant_mismatch_sum)
+	# (d.reference_mismatch_sum + d.variant_mismatch_sum)
+	1.
 end
 
 get_measurement_value(d::GeneExpression) = d.expression_value
