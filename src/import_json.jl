@@ -23,11 +23,64 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 		end
 
 	end
-
 end
 
+function import_cell_lines(experiment::Experiment, data::Dict{String, Any})
+    @info "importing cell lines"
+    if haskey(data, "cell_lines")
+        cell_lines = data["cell_lines"]
+        for cl in cell_lines
+            import_cell_line(experiment, cl)
+        end
+    end
+end
 
-function import_pathway_information(experiment::Experiment, data::Dict{String, Any})
+function import_genes(experiment::Experiment, data::Dict{String, Any})
+    @info "importing genes"
+    if haskey(data, "genes")
+        for gene in data["genes"]
+            add_gene(experiment, gene)
+        end
+    end
+end
+
+function import_proteins(experiment::Experiment, data::Dict{String, Any})
+    @info "importing proteins"
+    if haskey(data, "proteins")
+        for protein in data["proteins"]
+            add_protein(experiment, protein)
+        end
+    end
+end
+
+function import_drugs(experiment::Experiment, data::Dict{String, Any})
+    @info "importing drugs"
+    if haskey(data, "drugs")
+        for drug in data["drugs"]
+            add_drug(experiment, drug)
+        end
+    end
+end
+
+function import_outcomes(experiment::Experiment, data::Dict{String, Any})
+    @info "importing outcomes"
+    if !haskey(data, "outcome_type")
+        throw(ArgumentError("No outcome type specified."))
+    end
+    outcome_type = data["outcome_type"]
+    # TODO: change to "outcomes"
+    if !haskey(data, "drugs")
+        throw(ArgumentError("No outcomes specified, provide a dictionary of drug => outcome under the identifier 'outcomes'"))
+    end
+    outcomes = data["drugs"]
+    for (drug_name, outcome_data) in outcomes
+        @info "importing outcome for drug" drug_name
+        drug = get_drug!(experiment, drug_name)
+        add_outcome(experiment, drug, outcome_data, outcome_type = outcome_type)
+    end
+end
+
+function import_pathways(experiment::Experiment, data::Dict{String, Any})
     @info "importing pathway information"
     if haskey(data, "pathways")
         pathways = data["pathways"]
