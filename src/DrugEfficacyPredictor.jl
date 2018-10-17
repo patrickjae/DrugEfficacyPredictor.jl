@@ -9,6 +9,7 @@ include("dream_challenge_data.jl")
 include("webservice.jl")
 
 include("import_json.jl")
+include("export_json.jl")
 include("model_initialization.jl")
 include("inference.jl")
 include("prediction.jl")
