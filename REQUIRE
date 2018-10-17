@@ -4,6 +4,7 @@ Distributions
 JSON
 #Plots
 #Rsvg
+UUIDs
 HTTP
 DataFrames
 DataStructures
