@@ -56,7 +56,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 		(alpha, beta, mu, v) = all_configurations[i]
 		@info "parameter setting $i" alpha beta mu v
 		try
-			(lls, errs, test_errs, model) = parameter_inference(dep, convergence_criterion=1e-4, min_iter=10, 
+			(lls, errs, test_errs, model, convergence) = parameter_inference(dep, convergence_criterion=1e-4, #min_iter=10, 
 						⍺_ɣ=alpha, β_ɣ=beta,
 						⍺_λ=alpha, β_λ=beta,
 						⍺_ε=alpha, β_ε=beta,
@@ -66,6 +66,10 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 						μ_e=mu, 𝜎_e=v,
 						μ_a=mu, Σ_a=v,
 						μ_g=mu, Σ_g=v)
+			if convergence > 1 || convergence < 0
+				@warn "not converged" convergence
+				# continue
+			end
 			all_errors[i] = @sprintf("%f\t%f\t%f\t%f\t%f\t%f\t%f\n", alpha, beta, mu, v, errs[end], test_errs[end], lls[end])
 			# @printf(f, "%f\t%f\t%f\t%f\t%f\n", alpha, mu, v, errs[end], test_errs[end])
 			# flush(f)
@@ -93,7 +97,7 @@ end
 
 function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction; 
 					convergence_criterion::Float64 = 1e-3, 
-					min_iter::Int64 = 3, 
+					min_iter::Int64 = 1, max_iter = 30,
 					⍺_ɣ::Float64=1., β_ɣ::Float64=1.,
 					⍺_λ::Float64=1., β_λ::Float64=1.,
 					⍺_ε::Float64=1., β_ε::Float64=1.,
@@ -124,21 +128,21 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		end
 		kernel_products[d] = kp
 	end
+	@info "computed kernel products"
 	old_ll = -1e100
 	old_err = 1e100
 	ll = 0.
 	err = 0.
 	convergence = 1
-	err_convergence = 1
 	iter = 1
 	lls = Float64[]
 	errs = Float64[]
 	test_errs = Float64[]
 	# while err_convergence > convergence_criterion || iter < min_iter
-	while convergence > convergence_criterion || iter < min_iter
+	while convergence > convergence_criterion || iter < min_iter || iter > max_iter
 		ll, err = parameter_inference_step(dep, model, kernel_products, all_tasks)
-		convergence = (old_ll - ll)/old_ll
-		err_convergence = (old_err - err)/old_err
+		# convergence = (old_ll - ll)/old_ll
+		convergence = (old_err - err)/old_err
 		# break
 		old_ll = ll
 		old_err = err
@@ -147,11 +151,11 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		push!(errs,err)
 		(test_err, _, _) = test(dep, model)
 		push!(test_errs, test_err)
-		@info "inference stats" current_likelihood=ll current_error=err test_error=test_err convergence error_convergence=err_convergence
+		@info "inference stats" current_likelihood=ll current_error=err test_error=test_err convergence
 	end
 	# println("highest log likelihood at iteration $(sortperm(lls, rev=true)[1])")
 	# println("lowest error at iteration $(sortperm(errs)[1])")
-	(lls, errs, test_errs, model)
+	(lls, errs, test_errs, model, convergence)
 end
 
 # actual variational inference algorithm
