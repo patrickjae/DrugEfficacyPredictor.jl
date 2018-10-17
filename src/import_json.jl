@@ -91,7 +91,6 @@ function import_pathways(experiment::Experiment, data::Dict{String, Any})
     end
 end
 
-
 """
 Populates a data view with ExomeSeq data from JSON data.
 If no protein change is provided, we assume the empty string.
@@ -127,12 +126,15 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq},
 		nucleotid_change = get(entry, "nucleotid_change", "")
 		variant_confidence = get(entry, "variant_confidence", 1.)
 		norm_zygosity = get(entry, "norm_zygosity", "")
-		norm_reference_count = get(entry, "norm_reference_count", 0)
-		norm_variant_count = get(entry, "norm_variant_count", 0)
+		norm_reference_count = get(entry, "norm_reference_count", 0.)
+		norm_variant_count = get(entry, "norm_variant_count", 0.)
 		tumor_zygosity = get(entry, "tumor_zygosity", "")
-		tumor_reference_count = get(entry, "tumor_reference_count", 0)
-		tumor_variant_count = get(entry, "tumor_variant_count", 0)
+		tumor_reference_count = get(entry, "tumor_reference_count", 0.)
+		tumor_variant_count = get(entry, "tumor_variant_count", 0.)
 		details = get(entry, "details", "")
+
+        # @info "current settings" protein_change reference_mismatch_avg reference_mismatch_sum reference_dist3effective_avg variant_mismatch_avg variant_mismatch_sum variant_dist3effective_avg num_cosmic is_cancer_gene variant_effect nucleotid_change variant_confidence norm_zygosity norm_reference_count norm_variant_count tumor_zygosity tumor_reference_count tumor_variant_count details
+        # @info "current types" typeof(protein_change) typeof(reference_mismatch_avg) typeof(reference_mismatch_sum) typeof(reference_dist3effective_avg) typeof(variant_mismatch_avg) typeof(variant_mismatch_sum) typeof(variant_dist3effective_avg) typeof(num_cosmic) typeof(is_cancer_gene) typeof(variant_effect) typeof(nucleotid_change) typeof(variant_confidence) typeof(norm_zygosity) typeof(norm_reference_count) typeof(norm_variant_count) typeof(tumor_zygosity) typeof(tumor_reference_count) typeof(tumor_variant_count) typeof(details)
 
 		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg, 
                                 reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum, 
