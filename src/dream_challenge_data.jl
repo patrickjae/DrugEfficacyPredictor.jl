@@ -41,10 +41,10 @@ function import_dream_challenge_data(directory::String)
 			drugs = names(df)[2:end]
 			# println(typeof(df[:CellLine]))
 			cell_lines = df[:CellLine]
-			cl_objects = map(cl_id -> get_cell_line(experiment, cl_id, "Breast cancer"), cell_lines)
+			cl_objects = map(cl_id -> get_cell_line!(experiment, cl_id, "Breast cancer"), cell_lines)
 			for d in drugs
 				vals = df[d]
-				o = Outcome("IC50")
+				o = Outcome(string(d), "IC50")
 				add_results!(o, cl_objects[.!ismissing.(df[d])], Float64.(vals[.!ismissing.(df[d])]))
 				drug = get!(experiment.drugs, string(d), Drug(string(d)))
 				if data_type_string == "Drug_Response_Training"
@@ -169,7 +169,7 @@ function import_dream_challenge_data(directory::String)
 		@info "importing cell line data for $data_type"
 		try
 			for cl in get_cell_line_names_from_data_frame(data_type, df)
-				cl_obj = get_cell_line(experiment, cl, "Breast cancer")
+				cl_obj = get_cell_line!(experiment, cl, "Breast cancer")
 				data_view = get_dataview!(cl_obj, data_type, DataView{key_type, data_type}(cl))
 				populate_data_view!(data_view, df, experiment)
 			end

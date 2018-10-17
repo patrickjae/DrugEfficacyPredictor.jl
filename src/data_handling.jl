@@ -6,13 +6,14 @@ create_experiment() = Experiment()
 
 ######### CELL LINES ###########
 # get a cell line object for an experiment or creates a new one
-get_cell_line(experiment::Experiment, cell_line_id::String, cancer_type::String) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type))
+get_cell_line!(experiment::Experiment, cell_line_id::String, cancer_type::String) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type))
+get_cell_line(experiment::Experiment, cell_line_id::String) = experiment.cell_lines[cell_line_id]
 
 function get_cell_line(experiment::Experiment, data::Dict{String, Any})
 	if !haskey(data, "id") || !haskey(data, "cancer_type")
 		throw(ArgumentError("You need to provide a cell line id and the cancer type."))
 	end
-	get_cell_line(experiment, data["id"], data["cancer_type"])
+	get_cell_line!(experiment, data["id"], data["cancer_type"])
 end
 
 ######### GENES ###########
@@ -193,6 +194,33 @@ get_measurement_value(d::RNASeq) = d.expression_value
 get_measurement_value(d::RPPA) = d.protein_abundance
 get_measurement_value(d::CNV) = d.gene_level_cnv
 
+######### DRUGS ###########
+get_drug!(e::Experiment, id::String) = get!(e.drugs, id, Drug(id))
+get_drug(e::Experiment, id::String) = e.drugs[id]
+
+function add_drug(e::Experiment, id::String; affected_genes::Vector{Gene}=Vector{Gene}(), chemical_structure::String="")
+	d = get_drug!(e, id)
+	d.affected_genes = affected_genes
+	d.chemical_structure = chemical_structure
+	d
+end
+
+function add_drug(e::Experiment, data::Dict{String, Any})
+	if !haskey(data, "id")
+		throw(ArgumentError("No drug id specified."))
+	end
+	affected_genes = Vector{Gene}()
+	chemical_structure = ""
+	if haskey(data, "affected_genes")
+		for (id_type, gene_id) in data["affected_genes"]
+			push!(affected_genes, get_gene(e, gene_id, id_type))
+		end
+	end
+	if haskey(data, "chemical_structure")
+		chemical_structure = data["chemical_structure"]
+	end
+	add_drug(e, data["id"], affected_genes = affected_genes, chemical_structure = chemical_structure)
+end
 
 ######### NORMALIZATION ###########
 
@@ -278,6 +306,24 @@ end
 # add an outcome of a drug to the experiment
 function add_outcome!(e::Experiment, d::Drug, o::Outcome)
 	e.results[d] = o
+	e
+end
+
+function add_outcome(e::Experiment, d::Drug, data::Dict{String, Any}; outcome_type::String="IC50")
+	o = Outcome(d.id, outcome_type)
+	# @info "created outcome object for drug $(d.id)"
+	for (cell_line_id, outcome_value) in data
+		# @info "processing cell line outcome" cell_line_id outcome_value
+		if outcome_value == "NA"
+			# @info "$cell_line_id has NA value, skipping"
+			# skip NA values
+			continue
+		end
+		cl_obj = get_cell_line(e, cell_line_id)
+		# @info "got cell line object"
+		add_result!(o, cl_obj, outcome_value)
+	end
+	add_outcome!(e, d, o)
 	e
 end
 
