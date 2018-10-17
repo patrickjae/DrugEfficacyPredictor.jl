@@ -275,12 +275,13 @@ cell lines is correlated according to the molecular structure of the cell line t
 In other words, we model the outcome on available cell lines jointly.
 """
 mutable struct Outcome
+	drug_id::String
 	outcome_values::OrderedDict{CellLine, Float64}
 	outcome_type::String
 	normalized_outcome_values::OrderedDict{CellLine, Float64}
 	outcome_mean::Float64
 	outcome_std::Float64
-	Outcome(outcome_type::String) = new(OrderedDict{CellLine, Float64}(), outcome_type, OrderedDict{CellLine, Float64}(), .0, 1.)
+	Outcome(drug_id::String, outcome_type::String) = new(drug_id, OrderedDict{CellLine, Float64}(), outcome_type, OrderedDict{CellLine, Float64}(), .0, 1.)
 end
 
 
