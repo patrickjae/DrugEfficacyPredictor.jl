@@ -219,7 +219,7 @@ mutable struct Drug
 	id::String
 	affected_genes::Vector{Gene}
 	chemical_structure::String
-	Drug(id::String) = new(id, Gene[], "")
+	Drug(id::String; affected_genes::Vector{Gene}=Vector{Gene}(), chemical_structure::String="") = new(id, affected_genes, chemical_structure)
 end
 
 """
