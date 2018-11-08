@@ -10,12 +10,20 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::P
 	mse = 0
 	for (t, drug) in enumerate(keys(dep.experiment.results))
 		y_mean = sum(expected_value.(m.G[t,:]) .* expected_value.(m.e)) .+ expected_value(m.b[t])
+
 		y_cov = 1. / expected_value(m.ε[t])
+
 		actual_outcomes = dep.targets[drug]
 		# @info "######### Drug $(drug.id) #########" target_ranking=sortperm(dep.targets[drug]) prediction_ranking=sortperm(y_mean) prediction_variance=y_cov gamma=expected_value(m.ɣ[t]) epsilon=expected_value(m.ε[t]) nu=expected_value(m.ν[t])
-		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov.*Matrix(I, m.N[t], m.N[t])), actual_outcomes)
-		mse += sum((actual_outcomes .- y_mean).^2)/m.N[t]
+		y_mean_rescaled = y_mean .* dep.experiment.results[drug].outcome_std .+ dep.experiment.results[drug].outcome_mean
+		outcomes_rescaled = actual_outcomes .* dep.experiment.results[drug].outcome_std .+ dep.experiment.results[drug].outcome_mean
+
+		ll += Distributions.logpdf(Distributions.MvNormal(y_mean_rescaled, y_cov.*Matrix(I, m.N[t], m.N[t])), outcomes_rescaled)
+
+		mse += sum((outcomes_rescaled .- y_mean_rescaled).^2)
+		# @info "current error setting" actual_outcomes y_mean mse
 	end
+	mse /= sum(m.N)
 	# @info view_weights=expected_value.(m.e)
 	(ll, mse)
 end
