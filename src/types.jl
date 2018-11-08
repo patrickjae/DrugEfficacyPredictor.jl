@@ -178,10 +178,9 @@ mutable struct ExomeSeq <: VectorViewType
 		variant_dist3effective_avg::Float64=0., num_cosmic::Int64=0, variant_effect::AbstractString="", nucleotid_change::AbstractString="",
 		variant_confidence::Float64=1., norm_zygosity::AbstractString="", norm_reference_count::Float64=0., norm_variant_count::Float64=0.,
 		tumor_zygosity::AbstractString="", tumor_reference_count::Float64=0., tumor_variant_count::Float64=0., details::AbstractString="")
-		# data_summary = reference_mismatch_avg + variant_mismatch_avg
-		# 				+ reference_mismatch_sum + variant_mismatch_sum
-		# 				+ reference_dist3effective_avg + variant_dist3effective_avg
-		data_summary = 1.
+		data_summary = reference_mismatch_avg + variant_mismatch_avg
+						+ reference_mismatch_sum + variant_mismatch_sum
+						+ reference_dist3effective_avg + variant_dist3effective_avg
 		new(num_cosmic, variant_effect, protein_change, nucleotid_change, variant_confidence,
 			norm_zygosity, norm_reference_count, norm_variant_count, tumor_zygosity, tumor_reference_count, tumor_variant_count,
 			reference_mismatch_avg, variant_mismatch_avg, reference_mismatch_sum, variant_mismatch_sum,
