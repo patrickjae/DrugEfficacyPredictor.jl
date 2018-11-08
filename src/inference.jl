@@ -145,10 +145,10 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 	errs = Float64[]
 	test_errs = Float64[]
 	# while err_convergence > convergence_criterion || iter < min_iter
-	while convergence > convergence_criterion || iter < min_iter || iter > max_iter
+	while convergence > convergence_criterion || iter < min_iter
 		ll, err = parameter_inference_step(dep, model, kernel_products, all_tasks)
-		# convergence = (old_ll - ll)/old_ll
-		convergence = (old_err - err)/old_err
+		convergence = (old_ll - ll)/old_ll
+		# convergence = (old_err - err)/old_err
 		# break
 		old_ll = ll
 		old_err = err
