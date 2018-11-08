@@ -53,7 +53,7 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     # find cell lines that are present in all views, i.e. we need all data views for a cell line
     cell_lines_in_views = filter(cl -> length(cl.views) == length(experiment.views), cell_lines)
 
-    (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(experiment, cell_lines, subsume_pathways)
+    (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(experiment, cell_lines, subsume_pathways=subsume_pathways)
     T = length(experiment.results)
     N = Vector{Int64}(undef, T)
 
@@ -161,7 +161,7 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     dep
 end
 
-function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine}, cell_lines_test::Union{Vector{CellLine}, Nothing}=nothing, subsume_pathways::Bool=true)
+function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine}, cell_lines_test::Union{Vector{CellLine}, Nothing}=nothing; subsume_pathways::Bool=true)
     base_kernels = OrderedDict{Type{<:ViewType}, Matrix{Float64}}()
     pathway_specific_kernels = OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
     K = 0
