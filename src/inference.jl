@@ -84,7 +84,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 			# Plots.plot!(p, test_errs, label="test error")
 			# Plots.pdf(p, "gridsearch_charts/alpha_$(alpha)_mean_$(mu)_var_$(v).txt", p)
 			predictions = predict_outcomes(dep, model, collect(values(dep.experiment.cell_lines)))
-			write_prediction_file(joinpath(dest_path,"gridsearch_results","alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt"), dep, predictions)
+			write_results(dest_path, "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt", dep, predictions, model)
 			# @info "Processed settings:" alpha mu variance=v training_error=errs[end] test_error=test_errs[end]
 		catch exc
 			# display(stacktrace(catch_backtrace()))
