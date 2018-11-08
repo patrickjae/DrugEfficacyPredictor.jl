@@ -4,6 +4,7 @@ function test(dep::DrugEfficacyPrediction, m::PredictionModel)
     # do predictions for all drugs we saw at training time
     rankings = Dict{Drug, Vector{Int64}}()
     predictions = Dict{Drug, Vector{Float64}}()
+    sum_data_points = 0
     for (t, drug) in enumerate(keys(dep.experiment.results))
         training_drug_outcome = dep.experiment.results[drug]
 
@@ -25,13 +26,17 @@ function test(dep::DrugEfficacyPrediction, m::PredictionModel)
         # lower IC50 is better, so lowest ic50 (or whatever measure) results in highest rank (actually, the lowest number)
         # !!!!!!!!  BUT we are dealing with the -log(IC50) so higher value results in higher rank
         #########################
-        rankings[drug] = sortperm(y_mean, rev=true) 
+        rankings[drug] = zeros(Int64, length(y_mean))
+        rankings[drug][sortperm(y_mean, rev=true)] = collect(1:length(y_mean))
         y_mean_rescaled = y_mean .* training_drug_outcome.outcome_std .+ training_drug_outcome.outcome_mean
         predictions[drug] = y_mean_rescaled
 
+        #get unnormalized test targets
         actual_outcomes = dep.test_targets[drug]
-        mse += sum((actual_outcomes .- y_mean_rescaled).^2)/m.N[t]
+        mse += sum((actual_outcomes .- y_mean_rescaled).^2)
+        sum_data_points += length(actual_outcomes)
     end
+    mse /= sum_data_points
     # @info view_weights=expected_value.(m.e))
     (mse, predictions, rankings)
 end
