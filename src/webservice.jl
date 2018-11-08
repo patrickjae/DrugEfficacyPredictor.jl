@@ -13,6 +13,7 @@ debug_mode = false
 # base requests
 function handle_base_request(req::HTTP.Request)
     target = req.target
+    @info "handling base request"
     if endswith(target, "stop")
         req.response.status = 200
         req.response.body = JSON.json(Dict("status" => "success", "message" => "Server has been shut down."))
@@ -77,7 +78,7 @@ function handle_post_request(req::HTTP.Request)
     post_subject = get_function_target(target)
     # TODO check for whitelist of post_subject
 
-    target_function = eval(parse("import_$post_subject"))
+    target_function = eval(Meta.parse("import_$post_subject"))
 
     request_dictionary = JSON.parse(transcode(String, req.body))
 
@@ -102,7 +103,7 @@ function handle_get_collection_request(req::HTTP.Request)
     get_target = get_function_target(target)
 
     #get the object
-    getter_function = eval(parse("$(get_target)_to_json"))
+    getter_function = eval(Meta.parse("$(get_target)_to_json"))
     try 
         obj = getter_function(experiments_dictionary[experiment_id])
         req.response.status = 200
@@ -126,7 +127,7 @@ function handle_get_object_request(req::HTTP.Request)
     try get_target_id = parse(Int64, get_target_id) catch end
 
     #get the object
-    getter_function = eval(parse("get_$get_target"))
+    getter_function = eval(Meta.parse("get_$get_target"))
     try 
         obj = getter_function(get_target_id)
         req.response.status = 200
