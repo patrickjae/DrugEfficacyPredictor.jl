@@ -38,8 +38,6 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	normal_means = [0.]
 	# normal_vars = [1.]
 
-	mkpath(joinpath(dest_path,"gridsearch_results"))
-	mkpath(joinpath(dest_path,"gridsearch_charts"))
 	@info "created paths"
 	# Plots.plotlyjs()
 	all_configurations = Vector{Vector{Float64}}()
