@@ -278,7 +278,7 @@ function set_normalized_value(d::ViewType, value::Float64)
 	d.normalized_value = value
 end
 
-set_normalized_value(ds::Vector{<:VectorViewType}, values::Vector{Float64}) = foreach(pair -> set_normalized_value(pair[1], pair[2]), zip(ds, values))
+set_normalized_value(ds::Vector{<:VectorViewType}, vals::Vector{Float64}) = foreach(pair -> set_normalized_value(pair[1], pair[2]), zip(ds, vals))
 
 get_normalized_value(d::DataView{T, <:SingleViewType}, subject::T) where {T <: KeyType} = d.measurements[subject].normalized_value
 get_normalized_value(d::ViewType) = d.normalized_value
