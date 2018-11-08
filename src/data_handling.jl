@@ -274,6 +274,25 @@ function normalize_data_views(experiment::Experiment)
 end
 
 
+function filter_data_views(experiment::Experiment; proportion_kept = .1)
+	for v in experiment.views
+		if v == RNASeqCall continue end
+		@info "filtering view $v"
+		stats = experiment.statistics[v]
+		last_idx = 	Int64(ceil(length(stats) * proportion_kept))
+		sorted_idx = sortperm(map(val -> val[2], values(stats)), rev=true)
+		top_variance_keys = collect(keys(stats))[sorted_idx][1:last_idx]
+
+		for cl in values(experiment.cell_lines)
+			if haskey(cl.views, v)
+				empty!(cl.views[v].used_keys)
+				filtered_key_set = intersect(top_variance_keys, unique(keys(cl.views[v].measurements)))
+				union!(cl.views[v].used_keys, filtered_key_set)
+			end
+		end
+	end
+end
+
 function set_normalized_value(d::ViewType, value::Float64)
 	d.normalized_value = value
 end
