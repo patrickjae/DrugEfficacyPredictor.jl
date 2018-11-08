@@ -28,6 +28,9 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
         @info "normalizing training data took $tt seconds"
     end
 
+    ft = @elapsed filter_data_views(experiment)
+    @info "filtering data tool $ft seconds"
+
     # collect outcomes statistics
     for (t, drug) in enumerate(keys(experiment.results))
         vals = collect(values(experiment.results[drug].outcome_values))
