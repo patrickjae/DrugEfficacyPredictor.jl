@@ -158,6 +158,10 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		(test_err, _, _) = test(dep, model)
 		push!(test_errs, test_err)
 		@info "inference stats" current_likelihood=ll current_error=err test_error=test_err convergence
+		if iter > max_iter
+			@info("reached maxium number of iterations ($max_iter), terminating")
+			break
+		end
 	end
 	# println("highest log likelihood at iteration $(sortperm(lls, rev=true)[1])")
 	# println("lowest error at iteration $(sortperm(errs)[1])")
