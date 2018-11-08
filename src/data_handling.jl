@@ -230,13 +230,17 @@ function normalize_data_views(experiment::Experiment)
 	for v in experiment.views
 		# Boolean vals need not be normalized
 		if v == RNASeqCall continue end
+		@info "normalizing view $v"
 		# reset the normalization statistics for this view
 		experiment.statistics[v] = OrderedDict{KeyType, Tuple{Float64, Float64}}()
+		# clean used keys for cell lines and
 		# collect the keys in this view over all cell lines that it
 		all_keys_in_view = Vector{KeyType}()
 		for cl in values(experiment.cell_lines)
 			# if the cell line has data for this view, collect the keys
 			if haskey(cl.views, v)
+				empty!(cl.views[v].used_keys)
+				union!(cl.views[v].used_keys, unique(keys(cl.views[v].measurements)))
 				all_keys_in_view = union(all_keys_in_view, cl.views[v].used_keys)
 			end
 		end
