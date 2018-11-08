@@ -62,7 +62,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 		(alpha, beta, mu, v) = all_configurations[i]
 		@info "parameter setting $i" alpha beta mu v
 		try
-			(lls, errs, test_errs, model, convergence) = parameter_inference(dep, convergence_criterion=1e-4, #min_iter=10, 
+			(lls, errs, test_errs, model, convergence) = parameter_inference(dep, convergence_criterion=1e-4, min_iter=5, 
 						⍺_ɣ=alpha, β_ɣ=beta,
 						⍺_λ=alpha, β_λ=beta,
 						⍺_ε=alpha, β_ε=beta,
@@ -103,7 +103,7 @@ end
 
 function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction; 
 					convergence_criterion::Float64 = 1e-3, 
-					min_iter::Int64 = 1, max_iter = 30,
+					min_iter::Int64 = 1, max_iter = 300,
 					⍺_ɣ::Float64=1., β_ɣ::Float64=1.,
 					⍺_λ::Float64=1., β_λ::Float64=1.,
 					⍺_ε::Float64=1., β_ε::Float64=1.,
