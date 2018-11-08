@@ -256,12 +256,14 @@ function normalize_data_views(experiment::Experiment)
 					end
 				end
 			end
+			# @info all_values
 			mean_val = mean(all_values)
 			std_val = stdm(all_values, mean_val)
-			if std_val == 0.
+			if std_val == 0. || isnan(std_val)
 				# @warn "standard deviation is zero in view $v for key $key"
-				std_val += 1e-7
+				std_val = 1e-7
 			end
+			# @info "computed values" mean=mean_val std=std_val
 			#iterate over values again and normalize 
 			for cl in values(experiment.cell_lines)
 				if haskey(cl.views,v)
