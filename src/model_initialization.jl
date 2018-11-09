@@ -108,12 +108,13 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
             # push!(cross_base_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
             push!(kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
             push!(cross_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
-
-            for pw_kernel in pathway_specific_kernels[v]
-                # push!(dep_pathway_specific_kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
-                # push!(cross_pathway_specific_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
-                push!(kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
-                push!(cross_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
+            if length(experiment.pathway_information) != 0
+                for pw_kernel in pathway_specific_kernels[v]
+                    # push!(dep_pathway_specific_kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
+                    # push!(cross_pathway_specific_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
+                    push!(kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
+                    push!(cross_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
+                end
             end
         end
         # compute additional kernels
@@ -182,50 +183,53 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
         kct = @elapsed base_kernels[v] = compute_kernel(data_views...)
         @info "computing base kernel for $v $kct seconds)"
         K += 1
-        @info "computing pathway specific kernels..."
-        pathway_specific_kernels[v] = Vector{Matrix{Float64}}()
+        if length(experiment.pathway_information) != 0
+            @info "computing pathway specific kernels..."
+            pathway_specific_kernels[v] = Vector{Matrix{Float64}}()
 
-        # # pathway specific kernels method 1: compute a kernel for each pathway
-        if !subsume_pathways
-            num_pws = length(experiment.pathway_information)
-            tt = 0
-            for pathway in experiment.pathway_information
-                tt += @elapsed push!(pathway_specific_kernels[v], compute_kernel(data_views..., pathway=pathway))
-            end
-            K += num_pws
+            # # pathway specific kernels method 1: compute a kernel for each pathway
+            if !subsume_pathways
+                num_pws = length(experiment.pathway_information)
+                tt = 0
+                for pathway in experiment.pathway_information
+                    tt += @elapsed push!(pathway_specific_kernels[v], compute_kernel(data_views..., pathway=pathway))
+                end
+                K += num_pws
 
-            # method 1 end
-        else
-            # pathway specific kernels method 2:
-            # - for each cell line:
-            #   - for each pathway:
-            #       - compute average (expression data) or max value (otherwise) over pathway genes
-            # - compute cell line similarities as usual
-            tt = @elapsed begin
-                cell_line_gene_set_views = Vector{Vector{Float64}}(undef, length(cell_lines))
-                for (cl_idx, dv) in enumerate(data_views...)
-                    cell_line_gene_set_views[cl_idx] = zeros(length(experiment.pathway_information))
-                    for (pw_idx, pathway) in enumerate(experiment.pathway_information)
+                # method 1 end
+            else
+                # pathway specific kernels method 2:
+                # - for each cell line:
+                #   - for each pathway:
+                #       - compute average (expression data) or max value (otherwise) over pathway genes
+                # - compute cell line similarities as usual
+                tt = @elapsed begin
+                    cell_line_gene_set_views = Vector{Vector{Float64}}(undef, length(cell_lines))
+                    for (cl_idx, dv) in enumerate(data_views...)
+                        cell_line_gene_set_views[cl_idx] = zeros(length(experiment.pathway_information))
+                        for (pw_idx, pathway) in enumerate(experiment.pathway_information)
 
-                        (m_values, _) = prepare_kernel(dv, dv, pathway)
-                        if v in [RNASeq, GeneExpression]
-                            cell_line_gene_set_views[cl_idx][pw_idx] = mean(m_values)
-                        else
-                            cell_line_gene_set_views[cl_idx][pw_idx] = maximum(m_values)
+                            (m_values, _) = prepare_kernel(dv, dv, pathway)
+                            if v in [RNASeq, GeneExpression]
+                                cell_line_gene_set_views[cl_idx][pw_idx] = mean(m_values)
+                            else
+                                cell_line_gene_set_views[cl_idx][pw_idx] = maximum(m_values)
+                            end
                         end
                     end
+                    pw_kernel = zeros(length(cell_lines), length(cell_lines))
+                    for i in 1:length(cell_lines), j in 1:length(cell_lines)
+                        pw_kernel[i,j] = kernel_function(cell_line_gene_set_views[i], cell_line_gene_set_views[j])
+                    end
+                    push!(pathway_specific_kernels[v], pw_kernel)
+                    K += 1
                 end
-                pw_kernel = zeros(length(cell_lines), length(cell_lines))
-                for i in 1:length(cell_lines), j in 1:length(cell_lines)
-                    pw_kernel[i,j] = kernel_function(cell_line_gene_set_views[i], cell_line_gene_set_views[j])
-                end
-                push!(pathway_specific_kernels[v], pw_kernel)
-                K += 1
-            end
-        # # method 2 end
-        end        
-        @info "computing pathway specific kernels for $v took $tt seconds)"
-
+            # # method 2 end
+            end        
+            @info "computing pathway specific kernels for $v took $tt seconds)"
+        else
+            @info "Note: no pathway information provided"
+        end
     end
     @info "done computing kernels"
     (K, base_kernels, pathway_specific_kernels)
