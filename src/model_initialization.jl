@@ -21,15 +21,18 @@ end
 Creates a DrugEfficacyPredictor object, holding the probabilistic model, all the data and
 the kernel functions.
 """
-function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, Any}=Dict{String, Any}(); subsume_pathways::Bool=true)
+function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, Any}=Dict{String, Any}(); subsume_pathways::Bool=true, do_variance_filtering::Bool=true)
     # make sure that measurements are normalized across cell lines
     if !experiment.is_normalized
         tt = @elapsed normalize_data_views(experiment)
         @info "normalizing training data took $tt seconds"
     end
 
-    ft = @elapsed filter_data_views(experiment)
-    @info "filtering data tool $ft seconds"
+    #do variance filtering if required
+    if do_variance_filtering
+        ft = @elapsed filter_data_views(experiment)
+        @info "filtering data tool $ft seconds"
+    end
 
     # collect outcomes statistics
     for (t, drug) in enumerate(keys(experiment.results))
