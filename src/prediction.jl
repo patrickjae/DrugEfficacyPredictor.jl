@@ -78,8 +78,10 @@ function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
             # dataviews_from_training = map(cl -> cl.views[v], collect(keys(dep.experiment.results[drug].outcome_values)))
             k = dep.base_kernels[v][training_set_cell_line_idx,predict_cell_line_idx]
             push!(kernels, k)
-            for pw_kernel in dep.pathway_specific_kernels[v]
-                push!(kernels, pw_kernel[training_set_cell_line_idx,predict_cell_line_idx])
+            if length(dep.experiment.pathway_information) != 0
+                for pw_kernel in dep.pathway_specific_kernels[v]
+                    push!(kernels, pw_kernel[training_set_cell_line_idx,predict_cell_line_idx])
+                end
             end
             # @info "computed kernels for view $v, size of kernel: $(size(k))"
         end
