@@ -16,20 +16,20 @@ function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::Abstract
     # 2) all the above but with exome seq data constant 1
 
     # 1)
-    do_experiment_stack(joinpath(dest_dir, "full_exome"), experiment)
+    do_experiment_stack(joinpath(dest_dir, "full_exome"), experiment, pathways_file)
 
     # normalize again with constant exome data
     experiment.is_normalized = false
     # overwrite function
     get_measurement_value(d::ExomeSeq) = 1
     
-    do_experiment_stack(joinpath(dest_dir, "const_exome"), experiment)
+    do_experiment_stack(joinpath(dest_dir, "const_exome"), experiment, pathways_file)
 
 
     nothing
 end
 
-function do_experiment_stack(dest_dir::String, experiment::Experiment)
+function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_file::String)
     add_pathways_cmd = `curl -X POST http://localhost:8888/experiments/dream_challenge/pathways -d @$pathways_file`
     # a
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false)
