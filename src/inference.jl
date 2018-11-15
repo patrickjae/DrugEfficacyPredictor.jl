@@ -35,8 +35,8 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 	normal_vars = [1., 2., 5.]
 	# gamma_dist_alphas = [1e-3]
 	# gamma_dist_betas = [1e-3]
-	normal_means = [0.]
 	# normal_vars = [1.]
+	normal_means = [1.]
 
 	mkpath(dest_path)
 	@info "created paths"
@@ -88,7 +88,7 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 			write_results(dest_path, "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt", dep, predictions, model)
 			# @info "Processed settings:" alpha mu variance=v training_error=errs[end] test_error=test_errs[end]
 		catch exc
-			# display(stacktrace(catch_backtrace()))
+			display(stacktrace(catch_backtrace()))
 			@warn "Exception occurred" exc alpha mu variance=v
 			break
 		end
@@ -111,9 +111,9 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 					⍺_ν::Float64=1., β_ν::Float64=1.,
 					⍺_⍵::Float64=1., β_⍵::Float64=1.,
 					μ_b::Float64=0., 𝜎_0::Float64=20.,
-					μ_e::Float64=0., 𝜎_e::Float64=20.,
-					μ_a::Float64=0., Σ_a::Float64=20.,
-					μ_g::Float64=0., Σ_g::Float64=20.)
+					μ_e::Float64=1., 𝜎_e::Float64=20.,
+					μ_a::Float64=1., Σ_a::Float64=20.,
+					μ_g::Float64=1., Σ_g::Float64=20.)
 	# Plots.plotly()
 	model = DrugEfficacyPredictor.PredictionModel(dep.T, dep.K, dep.N,
 					⍺_ɣ=⍺_ɣ, β_ɣ=β_ɣ,
