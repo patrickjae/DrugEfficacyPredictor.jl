@@ -23,7 +23,7 @@ function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::Abstract
     # overwrite function
     get_measurement_value(d::ExomeSeq) = 1
     
-    do_experiment_stack(joinpath(dest_dir, "const_exome", experiment)
+    do_experiment_stack(joinpath(dest_dir, "const_exome"), experiment)
 
 
     nothing
