@@ -18,7 +18,7 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::P
 		y_mean_rescaled = y_mean .* dep.experiment.results[drug].outcome_std .+ dep.experiment.results[drug].outcome_mean
 		outcomes_rescaled = actual_outcomes .* dep.experiment.results[drug].outcome_std .+ dep.experiment.results[drug].outcome_mean
 
-		ll += Distributions.logpdf(Distributions.MvNormal(y_mean_rescaled, y_cov.*Matrix(I, m.N[t], m.N[t])), outcomes_rescaled)
+		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov.*Matrix(I, m.N[t], m.N[t])), actual_outcomes)
 
 		mse += sum((outcomes_rescaled .- y_mean_rescaled).^2)
 		# @info "current error setting" actual_outcomes y_mean mse
