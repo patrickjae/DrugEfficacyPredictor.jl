@@ -259,7 +259,9 @@ function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPredict
 		ll += elbo(m.⍵[k])
 
 		# e
-		eta1 = sum(expected_value.(m.ε) .* dot.(collect(values(dep.targets)) .- expected_value.(m.b), expected_value.(m.G[:,k])))
+		# @info "types" size(collect(values(dep.targets))) size(expected_value.(m.b)) 
+		# @assert length(dep.targets) == length(m.b)
+		eta1 = sum(expected_value.(m.ε) .* dot.([el .- expected_value(m.b[i]) for (i, el) in enumerate(collect(values(dep.targets)))], expected_value.(m.G[:,k])))
 		# exp_g_sq_sum = 0
 		exp_g_sq_sum = sum(expected_value.(m.ε) .* tr.(expected_squared_value.(m.G[:,k])))
 		# exp_g_times_y_minus_b = 0

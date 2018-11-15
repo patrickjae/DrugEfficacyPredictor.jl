@@ -13,9 +13,14 @@ function test(dep::DrugEfficacyPrediction, m::PredictionModel)
         exp_a = expected_value(m.a[t])
         for (k, c_kernel) in enumerate(dep.cross_kernels[drug])
             G[k] = c_kernel * exp_a
+            # @info "G[$k]" length(G[k]) 
         end
+        # intermed = [G[k] .* expected_value(m.e[k]) for k in 1:length(G)]
+        # @info "intermed" length(intermed) length(m.e)
 
-        y_mean = sum(G .* expected_value.(m.e)) .+ expected_value(m.b[t])
+        y_mean = sum([G[k] .* expected_value(m.e[k]) for k in 1:length(G)]) .+ expected_value(m.b[t])
+
+        # @info "compute y_mean" length(y_mean)
         
         #########################
         # compute the ranking
@@ -112,7 +117,7 @@ function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
         # println("e: $(size(e_expected)), e type: $(typeof(e_expected)), $e_expected")
         pred_y = sum(G .* e_expected) .+ expected_value(m.b[t])
         # rescale the normalized prediction
-        pred_y_rescaled = pred_y * dep.experiment.results[drug].outcome_std + dep.experiment.results[drug].outcome_mean
+        pred_y_rescaled = pred_y * dep.experiment.results[drug].outcome_std .+ dep.experiment.results[drug].outcome_mean
         predictions[drug] = pred_y_rescaled
     end
     predictions
