@@ -29,36 +29,32 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::P
 end
 
 function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path::String="results")
-	gamma_dist_alphas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
-	gamma_dist_betas = [1e-3, 1e-2, .1, 1., 10., 1e2, 1e3]
+	# gamma_dist_alphas = [1e-10, 1e-5, .1, 1., 10., 1e5, 1e10]
+	# gamma_dist_betas = [1e-10, 1e-5, .1, 1., 10., 1e5, 1e10]
+	gamma_dist_alphas = [250., 500., 750., 1000.]
+	alpha_beta_ratios = [1., 5., 50., 100.]
+	# gamma_dist_betas = [1e-10, .1, 1., 1e10]
+	# gamma_dist_alphas = [1.]
+	# gamma_dist_betas = [1.]
 	# normal_means = [-1., 0., 1.]
-	normal_vars = [1., 2., 5.]
+	normal_vars = [.1, .5, 1., 2., 10., 20.]
 	# gamma_dist_alphas = [1e-3]
 	# gamma_dist_betas = [1e-3]
-	# normal_vars = [1.]
 	normal_means = [1.]
+	# normal_vars = [2.]
 
 	mkpath(dest_path)
 	@info "created paths"
 	# Plots.plotlyjs()
 	all_configurations = Vector{Vector{Float64}}()
-	for alpha in gamma_dist_alphas, beta in gamma_dist_betas, mu in normal_means, v in normal_vars
-		push!(all_configurations, [alpha, beta, mu, v])
+	for alpha in gamma_dist_alphas, ratio in alpha_beta_ratios, v in normal_vars
+		push!(all_configurations, [alpha, alpha/ratio, 1., v])
 	end
 	@info "created $(length(all_configurations)) parameter settings"
-    # (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(dep.experiment, collect(values(dep.experiment.cell_lines)))
-    
-    # K = dep.model.K
-    # base_kernels = dep.base_kernels
-    # pathway_specific_kernels = dep.pathway_specific_kernels
 
     all_errors = Vector{String}(undef, length(all_configurations))
 
-    # idx = Threads.Atomic{Int64}(1)
-	# for alpha in gamma_dist_alphas
-	# 	for mu in normal_means, v in normal_vars
 	@info "starting inference"
-	# Threads.@threads 
 	for i in 1:length(all_configurations)
 		(alpha, beta, mu, v) = all_configurations[i]
 		@info "parameter setting $i" alpha beta mu v
@@ -69,10 +65,11 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 						⍺_ε=alpha, β_ε=beta,
 						⍺_ν=alpha, β_ν=beta,
 						⍺_⍵=alpha, β_⍵=beta,
-						μ_b=mu, 𝜎_0=v,
-						μ_e=mu, 𝜎_e=v,
+						μ_b=0., 𝜎_0=v,
+						μ_e= 1. / dep.K, 𝜎_e=v,
 						μ_a=mu, Σ_a=v,
 						μ_g=mu, Σ_g=v)
+			@info "inference stats" likelihood=lls[end] train_error=err test_error=test_err convergence
 			if convergence > 1 || convergence < 0
 				@warn "not converged" convergence
 				# continue
@@ -135,7 +132,6 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		end
 		kernel_products[d] = kp
 	end
-	@info "computed kernel products"
 	old_ll = -1e100
 	old_err = 1e100
 	ll = 0.
@@ -158,7 +154,6 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction;
 		push!(errs,err)
 		(test_err, _, _) = test(dep, model)
 		push!(test_errs, test_err)
-		@info "inference stats" current_likelihood=ll current_error=err test_error=test_err convergence
 		if iter > max_iter
 			@info("reached maxium number of iterations ($max_iter), terminating")
 			break
@@ -172,7 +167,6 @@ end
 # actual variational inference algorithm
 function parameter_inference_step(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::PredictionModel, kernel_products::Dict{DrugEfficacyPredictor.Drug, Matrix{Float64}}, all_tasks::Vector{DrugEfficacyPredictor.Drug})
     cell_lines = collect(values(dep.experiment.cell_lines))
-	# @info "compute intermed kernel sums"
 	g_times_kernel = update_intermed_kernel_sum(dep, m)
 	# updates for model parameters in turn
 	ll = 0
