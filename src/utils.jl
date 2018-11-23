@@ -23,6 +23,7 @@ function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::Abstract
     # overwrite function
     get_measurement_value(d::ExomeSeq) = 1
     
+    # 2)
     do_experiment_stack(joinpath(dest_dir, "const_exome"), experiment, pathways_file)
 
 
@@ -33,15 +34,18 @@ function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_
     add_pathways_cmd = `curl -X POST http://localhost:8888/experiments/dream_challenge/pathways -d @$pathways_file`
     # a
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false)
+    set_training_test_kernels(dep)
     gridsearch(dep, joinpath(dest_dir, "full_data_no_pathways"))
 
     run(add_pathways_cmd)
     # c
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false, subsume_pathways = false)
+    set_training_test_kernels(dep)
     gridsearch(dep, joinpath(dest_dir, "full_data_full_pathways"))
 
     # e
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false, subsume_pathways = true)
+    set_training_test_kernels(dep)
     gridsearch(dep, joinpath(dest_dir, "full_data_sub_pathways"))
 
     # remove pathways for experiment
@@ -49,16 +53,19 @@ function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_
 
     # b
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true)
+    set_training_test_kernels(dep)
     gridsearch(dep, joinpath(dest_dir, "var_filter_data_no_pathways"))
 
     # add pathways again
     run(add_pathways_cmd)
     # d
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true, subsume_pathways = false)
+    set_training_test_kernels(dep)
     gridsearch(dep, joinpath(dest_dir, "var_filter_data_full_pathways"))
 
     # f
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true, subsume_pathways = true)
+    set_training_test_kernels(dep)
     gridsearch(dep, joinpath(dest_dir, "var_filter_data_sub_pathways"))
 
 end

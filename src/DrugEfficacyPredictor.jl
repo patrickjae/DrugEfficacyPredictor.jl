@@ -13,6 +13,7 @@ include("export_json.jl")
 include("model_initialization.jl")
 include("inference.jl")
 include("prediction.jl")
+include("pipeline.jl")
 include("utils.jl")
 
 ########################

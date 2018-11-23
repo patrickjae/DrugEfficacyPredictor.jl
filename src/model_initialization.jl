@@ -34,16 +34,6 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
         @info "filtering data tool $ft seconds"
     end
 
-    # collect outcomes statistics
-    for (t, drug) in enumerate(keys(experiment.results))
-        vals = collect(values(experiment.results[drug].outcome_values))
-        experiment.results[drug].outcome_mean = mean(vals)
-        experiment.results[drug].outcome_std = stdm(vals, experiment.results[drug].outcome_mean)
-    end
-
-
-    all_drugs = collect(keys(experiment.results)) # the tasks
-
     # compute base kernels between cell lines once, one for each ViewType
     # dep_base_kernels = Dict{Type{<:ViewType}, Matrix{Float64}}()
     # dep_pathway_specific_kernels = Dict{Type{<:ViewType}, Vector{Matrix{Float64}}}()
@@ -60,99 +50,13 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     T = length(experiment.results)
     N = Vector{Int64}(undef, T)
 
-    # compute drug specific kernels
-    kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
-    targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
-    cross_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
-    # cross_base_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
-    # cross_pathway_specific_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
-    test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
-
-    for (t, drug) in enumerate(all_drugs)
-        #init
-        # dep_base_kernels[drug] = Vector{Matrix{Float64}}()
-        # dep_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
-        # grouped_data_kernels[drug] = Vector{Matrix{Float64}}()
-        # cross_base_kernels[drug] = Vector{Matrix{Float64}}()
-        # cross_pathway_specific_kernels[drug] = Vector{Matrix{Float64}}()
-        kernels[drug] = Vector{Matrix{Float64}}()
-        cross_kernels[drug] = Vector{Matrix{Float64}}()
-
-        result_cell_lines = collect(keys(experiment.results[drug].outcome_values))
-        test_result_cell_lines = collect(keys(experiment.test_results[drug].outcome_values))
-        # find cell lines for which we have outcomes for the current drug
-        # indices of the cell lines with outcome that are available for all views (in outcome structure)
-        # idx_in_outcome = findin(collect(keys(experiment.results[drug].outcome_values)), cell_lines_in_views)
-        idx_in_cell_lines = findall((in)(result_cell_lines), cell_lines)
-        # find cell lines in test set for which we a measurement for the current drug
-        # idx_in_test_outcome = findin(collect(keys(experiment.test_results[drug].outcome_values)), cell_lines_in_views)
-        test_idx_in_cell_lines = findall((in)(test_result_cell_lines), cell_lines)
-        # indices of present cell lines that have outcome data (in cell lines vector)
-        # idx_in_cell_lines = findin(cell_lines_in_views, collect(keys(experiment.results[drug].outcome_values)))
-        idx_in_outcome = findall((in)(cell_lines), result_cell_lines)
-        # indices of present cell lines that have a test outcome
-        # test_idx_in_cell_lines = findin(cell_lines_in_views, collect(keys(experiment.test_results[drug].outcome_values)))
-        idx_in_test_outcome = findall((in)(cell_lines), test_result_cell_lines)
-        # only deal with cell lines that are available for all views AND have an outcome for the current drug
-        N[t] = length(idx_in_cell_lines)
-
-        for v in experiment.views
-            # cell_lines_with_view = filter(cl -> haskey(cl.views, v), cell_lines)
-            # @info "cell lines that have view $v: $(length(cell_lines_with_view))"
-            # idx_in_outcome2 = findin(collect(keys(experiment.results[drug].outcome_values)), cell_lines)
-            # @info "view $v: $(length(idx_in_outcome)), overall: $(length(idx2)), N[t]: $(model.N[t])"
-
-            # add base kernel restricted to cell lines for which we have outcome
-            # push!(dep_base_kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
-            # push!(cross_base_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
-            push!(kernels[drug], base_kernels[v][idx_in_cell_lines, idx_in_cell_lines])
-            push!(cross_kernels[drug], base_kernels[v][test_idx_in_cell_lines, idx_in_cell_lines])
-            if length(experiment.pathway_information) != 0
-                for pw_kernel in pathway_specific_kernels[v]
-                    # push!(dep_pathway_specific_kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
-                    # push!(cross_pathway_specific_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
-                    push!(kernels[drug], pw_kernel[idx_in_cell_lines, idx_in_cell_lines])
-                    push!(cross_kernels[drug], pw_kernel[test_idx_in_cell_lines, idx_in_cell_lines])
-                end
-            end
-        end
-        # compute additional kernels
-        # grouped kernels
-        gene_expression = base_kernels[GeneExpression][idx_in_cell_lines, idx_in_cell_lines]
-        methylation = base_kernels[Methylation][idx_in_cell_lines, idx_in_cell_lines]
-        cnv = base_kernels[CNV][idx_in_cell_lines, idx_in_cell_lines]
-
-        push!(kernels[drug], gene_expression .* methylation)
-        push!(kernels[drug], gene_expression .* cnv)
-        push!(kernels[drug], cnv .* methylation)
-        push!(kernels[drug], gene_expression .* methylation .* cnv)
-
-        cross_gene_expression = base_kernels[GeneExpression][test_idx_in_cell_lines, idx_in_cell_lines]
-        cross_methylation = base_kernels[Methylation][test_idx_in_cell_lines, idx_in_cell_lines]
-        cross_cnv = base_kernels[CNV][test_idx_in_cell_lines, idx_in_cell_lines]
-
-        push!(cross_kernels[drug], cross_gene_expression .* cross_methylation)
-        push!(cross_kernels[drug], cross_gene_expression .* cross_cnv)
-        push!(cross_kernels[drug], cross_cnv .* cross_methylation)
-        push!(cross_kernels[drug], cross_gene_expression .* cross_methylation .* cross_cnv)
-
-        #normalize the outcome data data for each drug across the cell lines
-        targets[drug] = ((collect(values(experiment.results[drug].outcome_values))[idx_in_outcome] .- experiment.results[drug].outcome_mean)./experiment.results[drug].outcome_std)
-        # test outcomes, not normalized
-        test_targets[drug] = collect(values(experiment.test_results[drug].outcome_values))[idx_in_test_outcome]
-    end
-    # accommodate for additional mixed kernels
-    K += 4
-    # pm = PredictionModel(T, K, N)
     dep = DrugEfficacyPrediction(experiment, T, K, N)
     dep.base_kernels = base_kernels
     dep.pathway_specific_kernels = pathway_specific_kernels
-    dep.kernels = kernels
-    dep.cross_kernels = cross_kernels
-    dep.targets = targets
-    dep.test_targets = test_targets
-    # for drug in all_drugs
+
+
+   # for drug in all_drugs
     #     # dep.base_kernels[drug] = dep_base_kernels[drug]
     #     # dep.pathway_specific_kernels[drug] = dep_pathway_specific_kernels[drug]
     #     dep.kernels[drug] = kernels[drug]
@@ -164,6 +68,7 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     # end
     dep
 end
+
 
 function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine}, cell_lines_test::Union{Vector{CellLine}, Nothing}=nothing; subsume_pathways::Bool=true)
     base_kernels = OrderedDict{Type{<:ViewType}, Matrix{Float64}}()
