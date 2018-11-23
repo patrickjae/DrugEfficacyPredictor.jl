@@ -69,11 +69,11 @@ function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path
 						μ_e= 1. / dep.K, 𝜎_e=v,
 						μ_a=mu, Σ_a=v,
 						μ_g=mu, Σ_g=v)
-			@info "inference stats" likelihood=lls[end] train_error=err test_error=test_err convergence
-			if convergence > 1 || convergence < 0
-				@warn "not converged" convergence
-				# continue
-			end
+			@info "inference stats" likelihood=lls[end] train_error=errs[end] test_error=test_errs[end] convergence
+			# if convergence > 1 || convergence < 0
+			# 	@warn "not converged" convergence
+			# 	# continue
+			# end
 			all_errors[i] = @sprintf("%f\t%f\t%f\t%f\t%f\t%f\t%f\n", alpha, beta, mu, v, errs[end], test_errs[end], lls[end])
 			# @printf(f, "%f\t%f\t%f\t%f\t%f\n", alpha, mu, v, errs[end], test_errs[end])
 			# flush(f)
