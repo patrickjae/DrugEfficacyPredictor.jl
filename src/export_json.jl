@@ -41,6 +41,7 @@ function to_json(data::CellLine)
     for (view_type, view_data) in cl.views
         response[view_type] = to_json(view_data)
     end
+    response["in_test_set"] = data.in_test_set
     response
 end
 

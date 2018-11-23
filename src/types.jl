@@ -259,11 +259,12 @@ end
 A cell line comprised with its ID, information on the cancer type and 
 dictionary of views, i.e. different data collected for this cell line.
 """
-struct CellLine <: Sample
+mutable struct CellLine <: Sample
 	id::String
 	cancer_type::String
 	views::Dict{Type{<:ViewType}, DataView{<:KeyType, <:ViewType}}
-	CellLine(id::String, cancer_type::String="unknown") = new(id, cancer_type, Dict{Type{<:ViewType}, DataView{<:KeyType, <:ViewType}}())
+	in_test_set::Bool
+	CellLine(id::String, cancer_type::String="unknown"; in_test_set::Bool=false) = new(id, cancer_type, Dict{Type{<:ViewType}, DataView{<:KeyType, <:ViewType}}(), in_test_set)
 end
 
 """
@@ -299,7 +300,7 @@ by the user, i.e. including pathway information, different data views, training 
 """
 mutable struct Experiment
 	results::OrderedDict{Drug, Outcome}
-	test_results::OrderedDict{Drug, Outcome}
+	# test_results::OrderedDict{Drug, Outcome}
 	cell_lines::OrderedDict{String, CellLine}
 	drugs::Dict{String, Drug}
 	genes::Dict{Int64, Gene}
@@ -313,7 +314,7 @@ mutable struct Experiment
 	function Experiment()
 		new(
 			OrderedDict{Drug, Outcome}(), # results
-			OrderedDict{Drug, Outcome}(), # test results
+			# OrderedDict{Drug, Outcome}(), # test results
 			OrderedDict{String, CellLine}(), # cell_lines
 			Dict{String, Drug}(), # drugs 
 			Dict{Int64, Gene}(), # genes

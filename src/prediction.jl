@@ -80,7 +80,7 @@ function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
     # do predictions for all drugs we saw at training time
     for (t, drug) in enumerate(keys(dep.experiment.results))
         # find cell lines that were used for training
-        training_cell_lines = collect(keys(dep.experiment.results[drug].outcome_values))
+        training_cell_lines = filter(cl -> !cl.in_test_set && haskey(dep.experiment.results[drug].outcome_values, cl), all_cell_lines)
 
         training_set_cell_line_idx = findall((in)(training_cell_lines), all_cell_lines)
         predict_cell_line_idx = findall((in)(cell_lines), all_cell_lines)
@@ -149,8 +149,8 @@ function write_results(parent_dir::String, filename::String, dep::DrugEfficacyPr
             target = 0.
             if haskey(dep.experiment.results, drug) && haskey(dep.experiment.results[drug].outcome_values, cl)
                 target = dep.experiment.results[drug].outcome_values[cl]
-            elseif haskey(dep.experiment.test_results, drug) && haskey(dep.experiment.test_results[drug].outcome_values, cl)
-                target = dep.experiment.test_results[drug].outcome_values[cl]
+            # elseif haskey(dep.experiment.test_results, drug) && haskey(dep.experiment.test_results[drug].outcome_values, cl)
+            #     target = dep.experiment.test_results[drug].outcome_values[cl]
             end
             @printf(f, "\t%.5f(%.5f)", predictions[drug][cl_id], target)
         end

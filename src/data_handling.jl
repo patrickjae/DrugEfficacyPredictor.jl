@@ -6,15 +6,21 @@ create_experiment() = Experiment()
 
 ######### CELL LINES ###########
 # get a cell line object for an experiment or creates a new one
-get_cell_line!(experiment::Experiment, cell_line_id::String, cancer_type::String) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type))
+get_cell_line!(experiment::Experiment, cell_line_id::String, cancer_type::String; in_test_set::Bool=false) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type, in_test_set = in_test_set))
 get_cell_line(experiment::Experiment, cell_line_id::String) = experiment.cell_lines[cell_line_id]
 
 function get_cell_line(experiment::Experiment, data::Dict{String, Any})
 	if !haskey(data, "id") || !haskey(data, "cancer_type")
 		throw(ArgumentError("You need to provide a cell line id and the cancer type."))
 	end
-	get_cell_line!(experiment, data["id"], data["cancer_type"])
+	in_test_set = false
+	if haskey(data, "in_test_set")
+		in_test_set = true
+	end
+	get_cell_line!(experiment, data["id"], data["cancer_type"], in_test_set = in_test_set)
 end
+
+remove_cell_line!(experiment::Experiment, cell_line_id::String) = if haskey(experiment.cell_lines, cell_line_id) delete!(experiment.cell_lines, cell_line_id) end
 
 ######### GENES ###########
 function add_gene(experiment::Experiment, gene::Gene) 
