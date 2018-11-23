@@ -1,12 +1,11 @@
 function test(dep::DrugEfficacyPrediction, m::PredictionModel)
     mse = 0
-    test_cell_lines = unique(union(map(outcome -> collect(keys(outcome.outcome_values)), collect(values(dep.experiment.test_results)))))
+    # test_cell_lines = unique(union(map(outcome -> collect(keys(outcome.outcome_values)), collect(values(dep.experiment.test_results)))))
     # do predictions for all drugs we saw at training time
     rankings = Dict{Drug, Vector{Int64}}()
     predictions = Dict{Drug, Vector{Float64}}()
     sum_data_points = 0
     for (t, drug) in enumerate(keys(dep.experiment.results))
-        training_drug_outcome = dep.experiment.results[drug]
 
         # TODO: check if we need to test for drug, i.e. if we have test_result for it
         G = Vector{Vector{Float64}}(undef, length(dep.cross_kernels[drug]))
@@ -33,8 +32,18 @@ function test(dep::DrugEfficacyPrediction, m::PredictionModel)
         #########################
         rankings[drug] = zeros(Int64, length(y_mean))
         rankings[drug][sortperm(y_mean, rev=true)] = collect(1:length(y_mean))
-        y_mean_rescaled = y_mean .* training_drug_outcome.outcome_std .+ training_drug_outcome.outcome_mean
+
+        # @info "computed rankings (train)"
+
+        # target_ranking = zeros(Int64, length(y_mean))
+        # target_ranking[sortperm(dep.targets[drug], rev=true)] = collect(1:length(y_mean))
+
+        # @info "computed rankings (target)"
+
+        y_mean_rescaled = y_mean .* dep.experiment.results[drug].outcome_std .+ dep.experiment.results[drug].outcome_mean
         predictions[drug] = y_mean_rescaled
+
+        # @info "######### Drug $(drug.id) #########" targets=dep.targets[drug] predictions=y_mean_rescaled target_ranking prediction_ranking=rankings[drug] prediction_variance=(1 ./ expected_value(m.ε[t])) gamma=expected_value(m.ɣ[t]) nu=expected_value(m.ν[t])
 
         #get unnormalized test targets
         actual_outcomes = dep.test_targets[drug]

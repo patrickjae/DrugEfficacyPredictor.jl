@@ -47,11 +47,10 @@ function import_dream_challenge_data(directory::String)
 				o = Outcome(string(d), "IC50")
 				add_results!(o, cl_objects[.!ismissing.(df[d])], Float64.(vals[.!ismissing.(df[d])]))
 				drug = get!(experiment.drugs, string(d), Drug(string(d)))
-				if data_type_string == "Drug_Response_Training"
-					add_outcome!(experiment, drug, o)
-				else
-					add_test_outcome!(experiment, drug, o)
-				end
+				add_outcome(experiment, drug, o)
+			end
+			if data_type_string == "test_data"
+				[cl.in_test_set = true for cl in cl_objects]
 			end
 			continue
 		elseif data_type_string == "test_data"

@@ -329,8 +329,12 @@ end
 
 ######### OUTCOME ###########
 # add an outcome of a drug to the experiment
-function add_outcome!(e::Experiment, d::Drug, o::Outcome)
-	e.results[d] = o
+function add_outcome(e::Experiment, d::Drug, o::Outcome)
+	if !haskey(e.results, d)
+		e.results[d] = o
+	else
+		merge!(e.results[d].outcome_values, o.outcome_values)
+	end
 	e
 end
 
