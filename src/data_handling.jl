@@ -352,11 +352,6 @@ function add_outcome(e::Experiment, d::Drug, data::Dict{String, Any}; outcome_ty
 		# @info "got cell line object"
 		add_result!(o, cl_obj, outcome_value)
 	end
-	add_outcome!(e, d, o)
-	e
-end
-
-function add_test_outcome!(e::Experiment, d::Drug, o::Outcome)
-	e.test_results[d] = o
+	add_outcome(e, d, o)
 	e
 end
