@@ -1,6 +1,6 @@
 function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::AbstractString, dest_dir::AbstractString="results/")
-    experiment = import_dream_challenge_data(dc_dir)
     @async start_server(8888)
+    experiment = import_dream_challenge_data(dc_dir)
 
     # stop_cmd = `curl http://localhost:8888/stop`
     # run(stop_cmd)
