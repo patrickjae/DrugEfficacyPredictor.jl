@@ -1,7 +1,7 @@
 module DrugEfficacyPredictor
 using CSV, DataFrames, DataStructures, Distributions, SpecialFunctions, Printf,
 	Statistics, LinearAlgebra
-
+include("../init.jl")
 include("distributional_parameters.jl")
 include("types.jl")
 include("data_handling.jl")
