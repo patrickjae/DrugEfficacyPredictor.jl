@@ -8,26 +8,36 @@ predictor_dictionary = Dict{String, DrugEfficacyPredictor. DrugEfficacyPredictio
 # create an experiment for testing purposes
 experiments_dictionary["test_id"] = create_experiment()
 
-debug_mode = false
+# debug_mode = false
+
+server = nothing
 
 # base requests
 function handle_base_request(req::HTTP.Request)
     target = req.target
-    @info "handling base request"
     if endswith(target, "stop")
+        @info "stopping server"
         req.response.status = 200
         req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Server has been shut down.")))
         stop_server(server)
         return req.response
     end
 
-    if endswith(target,"set_debug_mode")
-        req.response.status = 200
-        req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Experiment ID will be set to 'test_id' permanently.")))
-        debug_mode = true
-        global debug_mode
-        return req.response
-    end
+    # if endswith(target,"unset_debug_mode")
+    #     @info "unsetting debug mode"
+    #     req.response.status = 200
+    #     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Experiment ID will be set to 'test_id' permanently.")))
+    #     global debug_mode = false
+    #     return req.response
+    # end
+
+    # if endswith(target,"set_debug_mode")
+    #     @info "setting debug mode"
+    #     req.response.status = 200
+    #     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Experiment ID will be set to 'test_id' permanently.")))
+    #     global debug_mode = true
+    #     return req.response
+    # end
     req.response.status = 404
     req.response.body = create_response(JSON.json(Dict("status" => "error", "message" => "Unknown URI, use a registered function to proceed.")))
     req.response
@@ -37,6 +47,7 @@ end
 function handle_create_experiment_request(req::HTTP.Request)
     experiment = DrugEfficacyPredictor.create_experiment()
     exp_id = string(UUIDs.uuid4())
+    @info "creating experiment" experiment_id = exp_id
     experiments_dictionary[exp_id] = experiment
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Created new experiment", "experiment_id" => exp_id)))
@@ -53,8 +64,7 @@ function get_experiment_id(uri::String)
     if !haskey(experiments_dictionary, experiment_id)
         throw(ArgumentError("Experiment ID '$experiment_id' not found, have you created it?"))
     end
-    @info "got experiment object" experiment_id
-    # experiments_dictionary[experiment_id]
+    @info "extracted experiment object" experiment_id
     experiment_id
 end
 
@@ -71,7 +81,6 @@ end
 
 function handle_post_request(req::HTTP.Request)
     target = req.target
-    @info "target" target
     experiment_id = get_experiment_id(target)
     experiment = experiments_dictionary[experiment_id]
 
@@ -142,46 +151,42 @@ function handle_get_object_request(req::HTTP.Request)
     req.response
 end
 
-function handle_request(req::HTTP.Request)
-    target = req.target
-    @info "request target" target typeof(target)
-	func = eval(Meta.parse(replace(target, "/" => "DrugEfficacyPredictor.", count=1)))
+# function handle_request(req::HTTP.Request)
+#     target = req.target
+# 	func = eval(Meta.parse(replace(target, "/" => "DrugEfficacyPredictor.", count=1)))
 
-    # for all requests, require the experiment id.
-    request_dictionary = JSON.parse(transcode(String, req.body))
-    if !haskey(request_dictionary, "experiment_id") && !debug_mode
-        req.response.status = 500
-    	req.response.body = create_response(JSON.json(Dict("status" => "error", "message" => "Please provide an experiment_id.")))
-        return req.response
-    end
-    exp_id = debug_mode ? "test_id" : request_dictionary["experiment_id"]
-    if !haskey(experiments_dictionary, exp_id)
-        req.response.status = 500
-    	req.response.body = create_response(JSON.json(Dict("status" => "error", "message" => "Unknown experiment ID '$exp_id'.")))
-        return req.response
-    end
-    experiment = experiments_dictionary[exp_id]
+#     # for all requests, require the experiment id.
+#     request_dictionary = JSON.parse(transcode(String, req.body))
+#     if !haskey(request_dictionary, "experiment_id") && !debug_mode
+#         req.response.status = 500
+#     	req.response.body = create_response(JSON.json(Dict("status" => "error", "message" => "Please provide an experiment_id.")))
+#         return req.response
+#     end
+#     exp_id = debug_mode ? "test_id" : request_dictionary["experiment_id"]
+#     if !haskey(experiments_dictionary, exp_id)
+#         req.response.status = 500
+#     	req.response.body = create_response(JSON.json(Dict("status" => "error", "message" => "Unknown experiment ID '$exp_id'.")))
+#         return req.response
+#     end
+#     experiment = experiments_dictionary[exp_id]
 
-    try
-    	func(experiment, request_dictionary)
-        req.response.status = 200
-		req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => exp_id)))
-    catch ex
-    	st = map(string, stacktrace(catch_backtrace()))
-    	# error("Exception occurred: $(typeof(ex))")
-    	# @error "Stacktrace" st
-        rethrow(ex)
-        req.response.status = 500
-		req.response.body = create_response(JSON.json(Dict("status" => "exception", "type" => string(ex), "stacktrace" => st)))
-        return req.response
-	end
-    req.response
-end
+#     try
+#     	func(experiment, request_dictionary)
+#         req.response.status = 200
+# 		req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => exp_id)))
+#     catch ex
+#     	st = map(string, stacktrace(catch_backtrace()))
+#     	# error("Exception occurred: $(typeof(ex))")
+#     	# @error "Stacktrace" st
+#         rethrow(ex)
+#         req.response.status = 500
+# 		req.response.body = create_response(JSON.json(Dict("status" => "exception", "type" => string(ex), "stacktrace" => st)))
+#         return req.response
+# 	end
+#     req.response
+# end
 
 create_response(s::String) = Vector{UInt8}(s)
-
-server = nothing
-
 
 """
 Create the base routes for this webservice.
