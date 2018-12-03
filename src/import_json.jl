@@ -9,16 +9,14 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 		views = data["views"]
 		# should be a dict of views
 		for (k,v) in views
-			view_type = eval(parse(k))
+			view_type = eval(Meta.parse(k))
 			if view_type == RPPA
 				key_type = Protein
 			else
 				key_type = Gene
 			end
 			data_view = get_dataview!(cl, view_type, DataView{key_type, view_type}(cl.id))
-			@info "populating data view with key type '$key_type' and view type '$view_type'"
 			populate_data_view!(experiment, data_view, v)
-			@info "adding view type to experiment"
 			add_view!(experiment, view_type)
 		end
 
@@ -215,8 +213,8 @@ Populate a data view with CNV data form JSON.
 """
 function populate_data_view!(experiment::Experiment, d::DataView{Gene, CNV}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, data)
-		cnv_value = entry["gene_level_cnv"]
+		gene = add_gene(experiment, entry)
+		cnv_value = Float64(entry["gene_level_cnv"])
 		add_measurement!(d, gene, CNV(cnv_value))
 	end
 end
