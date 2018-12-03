@@ -1,5 +1,6 @@
 function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::AbstractString, dest_dir::AbstractString="results/")
     @async start_server(8888)
+    srv_shutdown_cmd = `curl http://localhost:8888/stop`
     experiment = import_dream_challenge_data(dc_dir)
 
     # stop_cmd = `curl http://localhost:8888/stop`
@@ -26,46 +27,48 @@ function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::Abstract
     # 2)
     do_experiment_stack(joinpath(dest_dir, "const_exome"), experiment, pathways_file)
 
-
+    run(srv_shutdown_cmd)
     nothing
 end
 
 function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_file::String)
     add_pathways_cmd = `curl -X POST http://localhost:8888/experiments/dream_challenge/pathways -d @$pathways_file`
+    ic = InferenceConfiguration()
+    ic.do_gridsearch = true
     # a
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false)
-    set_training_test_kernels(dep)
-    gridsearch(dep, joinpath(dest_dir, "full_data_no_pathways"))
+    ic.target_dir = joinpath(dest_dir, "full_data_no_pathways")
+    run_model(dep, inference_config = ic)
 
     run(add_pathways_cmd)
     # c
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false, subsume_pathways = false)
-    set_training_test_kernels(dep)
-    gridsearch(dep, joinpath(dest_dir, "full_data_full_pathways"))
+    ic.target_dir = joinpath(dest_dir, "full_data_full_pathways")
+    run_model(dep, inference_config = ic)
 
     # e
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false, subsume_pathways = true)
-    set_training_test_kernels(dep)
-    gridsearch(dep, joinpath(dest_dir, "full_data_sub_pathways"))
+    ic.target_dir = joinpath(dest_dir, "full_data_sub_pathways")
+    run_model(dep, inference_config = ic)
 
     # remove pathways for experiment
     empty!(experiment.pathway_information)
 
     # b
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true)
-    set_training_test_kernels(dep)
-    gridsearch(dep, joinpath(dest_dir, "var_filter_data_no_pathways"))
+    ic.target_dir = joinpath(dest_dir, "var_filter_data_no_pathways")
+    run_model(dep, inference_config = ic)
 
     # add pathways again
     run(add_pathways_cmd)
     # d
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true, subsume_pathways = false)
-    set_training_test_kernels(dep)
-    gridsearch(dep, joinpath(dest_dir, "var_filter_data_full_pathways"))
+    ic.target_dir = joinpath(dest_dir, "var_filter_data_full_pathways")
+    run_model(dep, inference_config = ic)
 
     # f
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true, subsume_pathways = true)
-    set_training_test_kernels(dep)
-    gridsearch(dep, joinpath(dest_dir, "var_filter_data_sub_pathways"))
+    ic.target_dir = joinpath(dest_dir, "var_filter_data_sub_pathways")
+    run_model(dep, inference_config = ic)
 
 end
