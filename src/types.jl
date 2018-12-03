@@ -340,14 +340,18 @@ mutable struct DrugEfficacyPrediction
 	base_kernels::OrderedDict{Type{<:ViewType}, Matrix{Float64}}
 	pathway_specific_kernels::OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}
 
+	# training data
 	kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
-	cross_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
-	# cross_base_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
-	# cross_pathway_specific_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	targets::OrderedDict{Drug, Vector{Float64}}
+
+	# validation data
+	validation_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
+	validation_targets::OrderedDict{Drug, Vector{Float64}}
+
+	# test data
+	cross_kernels::OrderedDict{Drug, Vector{Matrix{Float64}}}
 	test_targets::OrderedDict{Drug, Vector{Float64}}
-	# continuous_kernel::Function
-	# discrete_kernel::Function
+
 	T::Int64
 	K::Int64
 	N::Vector{Int64}
@@ -356,11 +360,11 @@ mutable struct DrugEfficacyPrediction
 			experiment, 
 			OrderedDict{Type{<:ViewType}, Matrix{Float64}}(),
 			OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}(),
-			# OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(),
-			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
-			# OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Float64}}(),
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(),
+			OrderedDict{Drug, Vector{Float64}}(),
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
 			OrderedDict{Drug, Vector{Float64}}(),
 			T, K, N
 		)
@@ -372,6 +376,51 @@ end
 ########################################         MODEL         ###############################################
 ##############################################################################################################
 ##############################################################################################################
+mutable struct ModelConfiguration
+	# Gamma params for precision on bias term b
+	⍺_ɣ::Float64
+	β_ɣ::Float64
+	# Gamma params for precision on weights a
+	⍺_λ::Float64
+	β_λ::Float64
+	# Gamma params for precision on outcome y
+	⍺_ε::Float64
+	β_ε::Float64
+	# Gamma params for precision on intermediate results g
+	⍺_ν::Float64
+	β_ν::Float64
+	# Gamma params for precision on kernel weights e
+	⍺_⍵::Float64
+	β_⍵::Float64
+	# normal params for mean on bias
+	μ_b::Float64
+	𝜎_0::Float64
+	# normal params for mean on kernel weights
+	μ_e::Float64
+	𝜎_e::Float64
+	# mv normal params for weights
+	μ_a::Float64
+	Σ_a::Float64
+	# mv normal weights for intermediate results
+	μ_g::Float64
+	Σ_g::Float64
+
+	ModelConfiguration(⍺::Float64, β::Float64, μ::Float64, 𝜎::Float64) = new(⍺, β, ⍺, β, ⍺, β, ⍺, β, ⍺, β, μ, 𝜎, μ, 𝜎, μ, 𝜎, μ, 𝜎)
+	ModelConfiguration() = new(1000., 1000., 1000., 1000., 1000., 1000., 1000., 1000., 1000., 1000., 0., 2., 1., 2., 1., 2., 1., 2.)
+end
+
+mutable struct InferenceConfiguration
+	convergence_criterion::Float64
+	min_iter::Int64
+	max_iter::Int64
+	target_dir::String
+	fold_num::Int64
+	do_gridsearch::Bool
+	do_cross_validation::Bool
+	compute_wpc_index::Bool
+
+	InferenceConfiguration() = new(1e-3, 5, 200, "results/", 1, false, false, false)
+end
 mutable struct PredictionModel
 	# precision parameters, T-dimensional, one per drug/task
 	# ɣ::IsometricPrecisionParameter #precision to b <-- could be a matrix introducing covariance between drugs
@@ -403,16 +452,7 @@ mutable struct PredictionModel
 	K::Int64
 	N::Vector{Int64}
 
-	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64};
-					⍺_ɣ::Float64=1e-3, β_ɣ::Float64=1e3,
-					⍺_λ::Float64=1e-3, β_λ::Float64=1e3,
-					⍺_ε::Float64=1e-3, β_ε::Float64=1e3,
-					⍺_ν::Float64=1e-3, β_ν::Float64=1e3,
-					⍺_⍵::Float64=1e-3, β_⍵::Float64=1e3,
-					μ_b::Float64=0., 𝜎_0::Float64=20.,
-					μ_e::Float64=1., 𝜎_e::Float64=2.,
-					μ_a::Float64=1., Σ_a::Float64=2.,
-					μ_g::Float64=0., Σ_g::Float64=20.)
+	function PredictionModel(T::Int64, K::Int64, N::Vector{Int64}; model_config::ModelConfiguration = ModelConfiguration())
 		p = new()
 		p.T = T
 		p.K = K
@@ -421,8 +461,8 @@ mutable struct PredictionModel
 		p.ɣ = VectorGammaParameter(undef, T)
 		p.b = Vector{NormalParameter}(undef, T)
 		for t in 1:T
-			p.ɣ[t] = GammaParameter(⍺_ɣ, β_ɣ)
-			p.b[t] = NormalParameter(μ_b, 𝜎_0)
+			p.ɣ[t] = GammaParameter(model_config.⍺_ɣ, model_config.β_ɣ)
+			p.b[t] = NormalParameter(model_config.μ_b, model_config.𝜎_0)
 			set_variable_name(p.ɣ[t], "ɣ[$t]")
 			set_variable_name(p.b[t], "b[$t]")
 		end
@@ -432,11 +472,11 @@ mutable struct PredictionModel
 		p.a = Vector{MvNormalParameter}(undef, T)
 		for t in 1:T
 			p.λ[t] = VectorGammaParameter(undef, N[t])
-			p.a[t] = MvNormalParameter(μ_a, Σ_a, N[t])
+			p.a[t] = MvNormalParameter(model_config.μ_a, model_config.Σ_a, N[t])
 			# p.a[t] = Vector{NormalParameter}(N[t])
 			set_variable_name(p.a[t], "a[$t]")
 			for n in 1:N[t]
-				p.λ[t][n] = GammaParameter(⍺_λ, β_λ)
+				p.λ[t][n] = GammaParameter(model_config.⍺_λ, model_config.β_λ)
 				set_variable_name(p.ɣ[t], "λ[$t][$n]")
 				# p.a[t][n] = NormalParameter(m_0, s_0)
 			end
@@ -444,26 +484,26 @@ mutable struct PredictionModel
 
 		p.ε = VectorGammaParameter(undef, T)
 		for t in 1:T
-			p.ε[t] = GammaParameter(⍺_ε, β_ε)
+			p.ε[t] = GammaParameter(model_config.⍺_ε, model_config.β_ε)
 			set_variable_name(p.ε[t], "ε[$t]")
 		end
 
 		p.ν = VectorGammaParameter(undef, T)
 		for t in 1:T
-			p.ν[t] = GammaParameter(⍺_ν, β_ν)
+			p.ν[t] = GammaParameter(model_config.⍺_ν, model_config.β_ν)
 			set_variable_name(p.ν[t], "ν[$t")
 		end
 		p.G = Matrix{MvNormalParameter}(undef, T, K)
 		for t in 1:T, k in 1:K
-			p.G[t,k] = MvNormalParameter(μ_g, Σ_g, N[t])
+			p.G[t,k] = MvNormalParameter(model_config.μ_g, model_config.Σ_g, N[t])
 			set_variable_name(p.G[t,k], "G[$t,$k]")
 		end
 
 		p.⍵ = VectorGammaParameter(undef, K)
 		p.e = Vector{NormalParameter}(undef, K)
 		for k in 1:K
-			p.⍵[k] = GammaParameter(⍺_⍵, β_⍵)
-			p.e[k] = NormalParameter(μ_e, 𝜎_e)
+			p.⍵[k] = GammaParameter(model_config.⍺_⍵, model_config.β_⍵)
+			p.e[k] = NormalParameter(model_config.μ_e, model_config.𝜎_e)
 			set_variable_name(p.⍵[k], "⍵[$k]")
 			set_variable_name(p.e[k], "e[$k]")
 		end
