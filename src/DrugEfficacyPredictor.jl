@@ -6,6 +6,7 @@ include("distributional_parameters.jl")
 include("types.jl")
 include("data_handling.jl")
 include("dream_challenge_data.jl")
+include("iorio.jl")
 include("webservice.jl")
 
 include("import_json.jl")
