@@ -249,7 +249,7 @@ function write_results(dep::DrugEfficacyPrediction, parent_dir::String, filename
     f = open(prediction_file, "w")
     @printf(f, "DrugAnonID\tType")
     for d in collect(keys(dep.experiment.results))
-        @printf(f, "\t%s (prediction)\t%s (measured)", d.id)
+        @printf(f, "\t%s (prediction)\t%s (measured)", d.id, d.id)
     end
     @printf(f, "\n")
     for (cl_id, cl) in enumerate(collect(values(dep.experiment.cell_lines)))
