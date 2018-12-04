@@ -1,4 +1,4 @@
-function run_dreamchallenge_data(dc_dir::AbstractString, pathways_file::AbstractString, dest_dir::AbstractString="results/")
+function run_dreamchallenge_data(pathways_file::AbstractString, dest_dir::AbstractString="results/")
     @async start_server(8888)
     srv_shutdown_cmd = `curl http://localhost:8888/stop`
     experiment = load_dream_challenge_data()
