@@ -45,12 +45,23 @@ end
 
 # create experiment
 function handle_create_experiment_request(req::HTTP.Request)
-    experiment = DrugEfficacyPredictor.create_experiment()
+    request_dictionary = JSON.parse(transcode(String, req.body))
     exp_id = string(UUIDs.uuid4())
+    exp_id_wanted = ""
+    create_message = "Created new experiment."
+    if haskey(request_dictionary, "experiment_id")
+        exp_id_wanted = request_dictionary["experiment_id"]
+        if !haskey(experiments_dictionary, exp_id_wanted)
+            exp_id = exp_id_wanted
+        else
+            create_message *= " Your requested experiment_id is already in use, we have created a random one."
+        end
+    end
+    experiment = DrugEfficacyPredictor.create_experiment()
     @info "creating experiment" experiment_id = exp_id
     experiments_dictionary[exp_id] = experiment
     req.response.status = 200
-    req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Created new experiment", "experiment_id" => exp_id)))
+    req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => create_message, "experiment_id" => exp_id)))
     req.response
 end
 
