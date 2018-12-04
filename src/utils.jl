@@ -35,6 +35,7 @@ function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_
     add_pathways_cmd = `curl -X POST http://localhost:8888/experiments/dream_challenge/pathways -d @$pathways_file`
     ic = InferenceConfiguration()
     ic.do_gridsearch = true
+    ic.compute_wpc_index = true
     # a
     dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false)
     ic.target_dir = joinpath(dest_dir, "full_data_no_pathways")
