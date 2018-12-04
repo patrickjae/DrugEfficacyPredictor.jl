@@ -1,4 +1,4 @@
-function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10, inference_config::InferenceConfiguration = InferenceConfiguration())
+function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10, inference_config::InferenceConfiguration = InferenceConfiguration(), model_config::Union{Nothing, ModelConfiguration} = nothing)
     if !inference_config.do_cross_validation
         throw(ArgumentError("run_cross_validation called without proper inference configuration, make sure the do_cross_validation flag is set to true"))
     end
@@ -19,7 +19,7 @@ function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10
             end
         end
         inference_config.fold_num = i
-        run_model(dep, inference_config = inference_config)
+        run_model(dep, inference_config = inference_config, model_config = model_config)
     end
 end
 
