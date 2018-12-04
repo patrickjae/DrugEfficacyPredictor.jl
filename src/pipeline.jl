@@ -247,13 +247,14 @@ function write_results(dep::DrugEfficacyPrediction, parent_dir::String, filename
     mkpath(joinpath(parent_dir,"prediction"))
     prediction_file = joinpath(parent_dir, "prediction", filename)
     f = open(prediction_file, "w")
-    @printf(f, "DrugAnonID")
+    @printf(f, "DrugAnonID\tType")
     for d in collect(keys(dep.experiment.results))
-        @printf(f, "%s\t", d.id)
+        @printf(f, "\t%s (prediction)\t%s (measured)", d.id)
     end
     @printf(f, "\n")
     for (cl_id, cl) in enumerate(collect(values(dep.experiment.cell_lines)))
         @printf(f, "%s", cl.id)
+        if cl.in_test_set @printf(f, "\tTest") else @printf(f, "\tTraining") end
         for drug in collect(keys(dep.experiment.results))
             # drug = dep.experiment.drugs["Drug$d_id"]
             target = 0.
@@ -262,7 +263,7 @@ function write_results(dep::DrugEfficacyPrediction, parent_dir::String, filename
             # elseif haskey(dep.experiment.test_results, drug) && haskey(dep.experiment.test_results[drug].outcome_values, cl)
             #     target = dep.experiment.test_results[drug].outcome_values[cl]
             end
-            @printf(f, "\t%.5f(%.5f)", predictions[drug][cl_id], target)
+            @printf(f, "\t%.5f\t%.5f", predictions[drug][cl_id], target)
         end
         @printf(f, "\n")
     end
