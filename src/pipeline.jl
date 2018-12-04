@@ -97,13 +97,13 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
     # if doing gridsearch, create model configs to use
     if inference_config.do_gridsearch
         gamma_dist_alphas = [250., 500., 750., 1000.]
-        alpha_beta_ratios = [1., 5., 50., 100.]
-        normal_vars = [.1, .5, 1., 2., 10., 20.]
+        alpha_beta_ratios = [.1, .5, 1., 2.5, 5.]
+        normal_vars = [.1, .5, 1., 2.]
         # normal_means = [1.]
         for alpha in gamma_dist_alphas, ratio in alpha_beta_ratios, v in normal_vars
             mc = ModelConfiguration(alpha, alpha/ratio, 1., v)
+            # assume no bias, hence zero-mean priors on b
             mc.μ_b = 0.
-            mc.μ_e = 1.
             push!(all_model_configs, mc)
         end
     #  else just use the model config as provided in the call
