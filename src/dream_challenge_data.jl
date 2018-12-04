@@ -1,4 +1,5 @@
-function import_dream_challenge_data(directory::String)
+function load_dream_challenge_data()
+	directory = joinpath(PROJECT_ROOT, "data", "dream_challenge")
 	@info "importing dream challenge data from $directory"
 	experiment = create_experiment()
 	experiments_dictionary["dream_challenge"] = experiment
