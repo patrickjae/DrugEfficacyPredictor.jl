@@ -1,4 +1,72 @@
 """
+Read in inference configuration.
+"""
+function read_inference_configuration(data::Dict{String, Any})
+    ic = InferenceConfiguration()
+    if haskey(data, "inference_configuration")
+        ic_data = data["inference_configuration"]
+        if haskey(ic_data, "convergence_criterion") ic.convergence_criterion = ic_data["convergence_criterion"] end
+        if haskey(ic_data, "min_iter") ic.min_iter = ic_data["min_iter"] end
+        if haskey(ic_data, "max_iter") ic.max_iter = ic_data["max_iter"] end
+        if haskey(ic_data, "do_gridsearch") ic.do_gridsearch = ic_data["do_gridsearch"] end
+        if haskey(ic_data, "do_cross_validation") ic.do_cross_validation = ic_data["do_cross_validation"] end
+        if haskey(ic_data, "compute_wpc_index") ic.compute_wpc_index = ic_data["compute_wpc_index"] end
+        if haskey(ic_data, "do_variance_filtering") ic.do_variance_filtering = ic_data["do_variance_filtering"] end
+        if haskey(ic_data, "subsume_pathways") ic.subsume_pathways = ic_data["subsume_pathways"] end
+    end
+    ic
+end
+
+function read_model_configuration(data::Dict{String, Any})
+    mc = ModelConfiguration()
+    if haskey(data, "model_configuration")
+        mc_data = data["model_configuration"]
+        # general setting
+        if haskey(mc_data, "alpha") && haskey(mc_data, "beta") && haskey(mc_data, "mu") && haskey(mc_data, "sigma2")
+            return ModelConfiguration(mc_data["alpha"], mc_data["beta"], mc_data["mu"], mc_data["sigma2"])
+        end
+        # refined settings
+        if haskey(mc_data, "bias_precision_alpha") && haskey(mc_data, "bias_precision_beta")
+            mc.⍺_ɣ = mc_data["bias_precision_alpha"]
+            mc.β_ɣ = mc_data["bias_precision_beta"]
+        end
+        if haskey(mc_data, "weights_precision_alpha") && haskey(mc_data, "weights_precision_beta")
+            mc.⍺_λ = mc_data["weights_precision_alpha"]
+            mc.β_λ = mc_data["weights_precision_beta"]
+        end
+        if haskey(mc_data, "outcome_precision_alpha") && haskey(mc_data, "outcome_precision_beta")
+            mc.⍺_ε = mc_data["outcome_precision_alpha"]
+            mc.β_ε = mc_data["outcome_precision_beta"]
+        end
+        if haskey(mc_data, "intermed_results_precision_alpha") && haskey(mc_data, "intermed_results_precision_beta")
+            mc.⍺_ν = mc_data["intermed_results_precision_alpha"]
+            mc.β_ν = mc_data["intermed_results_precision_beta"]
+        end
+        if haskey(mc_data, "kernel_weights_precision_alpha") && haskey(mc_data, "kernel_weights_precision_beta")
+            mc.⍺_⍵ = mc_data["kernel_weights_precision_alpha"]
+            mc.β_⍵ = mc_data["kernel_weights_precision_beta"]
+        end
+        if haskey(mc_data, "bias_mean") && haskey(mc_data, "bias_sigma2")
+            mc.μ_b = mc_data["bias_mean"]
+            mc.𝜎_b = mc_data["bias_sigma2"]
+        end
+        if haskey(mc_data, "kernel_weights_mean") && haskey(mc_data, "kernel_weights_sigma2")
+            mc.μ_e = mc_data["kernel_weights_mean"]
+            mc.𝜎_e = mc_data["kernel_weights_sigma2"]
+        end
+        if haskey(mc_data, "weights_mean") && haskey(mc_data, "weights_sigma2")
+            mc.μ_a = mc_data["weights_mean"]
+            mc.Σ_a = mc_data["weights_sigma2"]
+        end
+        if haskey(mc_data, "intermed_results_mean") && haskey(mc_data, "intermed_results_sigma2")
+            mc.μ_g = mc_data["intermed_results_mean"]
+            mc.Σ_g = mc_data["intermed_results_sigma2"]
+        end
+    end
+    mc
+end
+
+"""
 Initialization of the probability model.
 """
 function initialize_probability_model(experiment::Experiment)
@@ -21,17 +89,17 @@ end
 Creates a DrugEfficacyPredictor object, holding the probabilistic model, all the data and
 the kernel functions.
 """
-function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, Any}=Dict{String, Any}(); subsume_pathways::Bool=true, do_variance_filtering::Bool=true)
+function create_drug_efficacy_predictor(experiment::Experiment, ic::InferenceConfiguration)
     # make sure that measurements are normalized across cell lines
     if !experiment.is_normalized
         tt = @elapsed normalize_data_views(experiment)
-        @info "normalizing training data took $tt seconds"
+        log_message("normalizing training data took $tt seconds")
     end
 
     #do variance filtering if required
-    if do_variance_filtering
+    if ic.do_variance_filtering
         ft = @elapsed filter_data_views(experiment)
-        @info "filtering data tool $ft seconds"
+        log_message("filtering data took $ft seconds")
     end
 
     # compute base kernels between cell lines once, one for each ViewType
@@ -46,7 +114,7 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     # find cell lines that are present in all views, i.e. we need all data views for a cell line
     cell_lines_in_views = filter(cl -> length(cl.views) == length(experiment.views), cell_lines)
 
-    (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(experiment, cell_lines, subsume_pathways=subsume_pathways)
+    (K, base_kernels, pathway_specific_kernels) = compute_all_kernels(experiment, cell_lines, subsume_pathways=ic.subsume_pathways)
     T = length(experiment.results)
     N = Vector{Int64}(undef, T)
 
@@ -54,7 +122,7 @@ function create_drug_efficacy_predictor(experiment::Experiment, ::Dict{String, A
     dep = DrugEfficacyPrediction(experiment, T, K, N)
     dep.base_kernels = base_kernels
     dep.pathway_specific_kernels = pathway_specific_kernels
-
+    dep.subsume_pathways = ic.subsume_pathways
 
    # for drug in all_drugs
     #     # dep.base_kernels[drug] = dep_base_kernels[drug]
@@ -76,7 +144,7 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
     K = 0
     # compute a base kernel for each view, containing all cell lines that are present in all views
     num_views = length(experiment.views)
-    @info "computing base kernels"
+    log_message("computing base kernels")
     for v in experiment.views
         # get views of this type for all cell lines
         # v = experiment.views[v_id]
@@ -86,17 +154,17 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
         end
         # compute the base kernel for this view
         kct = @elapsed base_kernels[v] = compute_kernel(data_views...)
-        @info "computing base kernel for $v $kct seconds)"
+        log_message("computing base kernel for $v $kct seconds)")
         K += 1
         if length(experiment.pathway_information) != 0
-            @info "computing pathway specific kernels..."
+            log_message("computing pathway specific kernels...")
             pathway_specific_kernels[v] = Vector{Matrix{Float64}}()
 
             # # pathway specific kernels method 1: compute a kernel for each pathway
             if !subsume_pathways
                 num_pws = length(experiment.pathway_information)
                 tt = 0
-                for pathway in experiment.pathway_information
+                for pathway in collect(values(experiment.pathway_information))
                     tt += @elapsed push!(pathway_specific_kernels[v], compute_kernel(data_views..., pathway=pathway))
                 end
                 K += num_pws
@@ -109,34 +177,37 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
                 #       - compute average (expression data) or max value (otherwise) over pathway genes
                 # - compute cell line similarities as usual
                 tt = @elapsed begin
-                    cell_line_gene_set_views = Vector{Vector{Float64}}(undef, length(cell_lines))
-                    for (cl_idx, dv) in enumerate(data_views...)
-                        cell_line_gene_set_views[cl_idx] = zeros(length(experiment.pathway_information))
-                        for (pw_idx, pathway) in enumerate(experiment.pathway_information)
+                    cell_line_gene_set_views = map((x) -> Vector{Vector{Float64}}(undef, length(x)), data_views)
+                    for (cl_set_idx, cl_set) in enumerate(data_views)
+                        for (cl_idx, dv) in enumerate(cl_set)
+                            cell_line_gene_set_views[cl_set_idx][cl_idx] = zeros(length(experiment.pathway_information))
+                            for (pw_idx, pathway) in enumerate(values(experiment.pathway_information))
 
-                            (m_values, _) = prepare_kernel(dv, dv, pathway)
-                            if v in [RNASeq, GeneExpression]
-                                cell_line_gene_set_views[cl_idx][pw_idx] = mean(m_values)
-                            else
-                                cell_line_gene_set_views[cl_idx][pw_idx] = maximum(m_values)
+                                (m_values, _) = prepare_kernel(dv, dv, pathway)
+                                if v in [RNASeq, GeneExpression]
+                                    cell_line_gene_set_views[cl_set_idx][cl_idx][pw_idx] = mean(m_values)
+                                else
+                                    cell_line_gene_set_views[cl_set_idx][cl_idx][pw_idx] = maximum(m_values)
+                                end
                             end
                         end
                     end
-                    pw_kernel = zeros(length(cell_lines), length(cell_lines))
-                    for i in 1:length(cell_lines), j in 1:length(cell_lines)
-                        pw_kernel[i,j] = kernel_function(cell_line_gene_set_views[i], cell_line_gene_set_views[j])
+                    len_views = length(cell_line_gene_set_views)
+                    pw_kernel = zeros(length(cell_line_gene_set_views[1]), length(cell_line_gene_set_views[len_views]))
+                    for i in 1:size(pw_kernel, 1), j in 1:size(pw_kernel, 2)
+                        pw_kernel[i,j] = kernel_function(cell_line_gene_set_views[1][i], cell_line_gene_set_views[len_views][j])
                     end
                     push!(pathway_specific_kernels[v], pw_kernel)
                     K += 1
                 end
             # # method 2 end
-            end        
-            @info "computing pathway specific kernels for $v took $tt seconds)"
+            end
+            log_message("computing pathway specific kernels for $v took $tt seconds)")
         else
-            @info "Note: no pathway information provided"
+            log_message("Note: no pathway information provided")
         end
     end
-    @info "done computing kernels"
+    log_message("done computing kernels")
     (K, base_kernels, pathway_specific_kernels)
 end
 
@@ -176,14 +247,13 @@ function compute_kernel(dvs::Vector{DataView}; pathway::Union{Pathway, Nothing} 
                 if i≠j k[j,i] = k[i,j] end
             end
         end
-        if !isposdef(k) 
+        if !isposdef(k)
             h_k = Array(Hermitian(k))
             # @warn "kernel is not positive definite, using only upper triangular form" isposdef(h_k) sum_diff=sum(abs.(h_k - k))
             k = h_k
         end
     end
-    @info "computed kernel ($(N*(N-1)) computations)" preparation_time=prep_time computation_time=comp_time
-    # @info "kernel computations took $kernel_compute_time seconds"
+    log_message("computed kernel ($(N*(N-1)) computations), preparation time=$prep_time computation time=$comp_time")
     k
 end
 
@@ -284,7 +354,7 @@ prepare_kernel(a::DataView{K,V}, b::DataView{K,V}, pathway::Union{Pathway, Nothi
 
 function get_common_keys(a::DataView, b::DataView, pathway::Union{Pathway, Nothing})
     # @info "getting common keys" pathway
-    if pathway != nothing 
+    if pathway != nothing
         return extract_pathway_keys(a, b, pathway)
     end
     if (b.view_type == NAViewType) || (b.used_keys == a.used_keys)
@@ -332,5 +402,5 @@ end
 #actual kernel functions
 # Gaussian
 kernel_function(x::Vector{Float64}, x_prime::Vector{Float64}, l::Float64 = Float64(length(x))) = exp(-dot(x-x_prime, x-x_prime)/l)
-# Jaccard 
+# Jaccard
 kernel_function(x::Vector{Bool}, x_prime::Vector{Bool}) = x'*x_prime/(x'*x + x_prime'*x_prime - x'*x_prime)
