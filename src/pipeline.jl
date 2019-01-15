@@ -195,6 +195,7 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
     # ranks = Vector{Dict{Drug, Vector{Int64}}}(undef, length(all_model_configs))
     # models = Vector{PredictionModel}(undef, length(all_model_configs))
     # do the actual inference sweep
+    cnt = Base.Threads.Atomic{Int64}(0)
     Threads.@threads for i in 1:length(all_model_configs)
         mc = all_model_configs[i]
         # TODO: this assumes we are using the same values for all params, maybe change later
@@ -203,8 +204,8 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
         beta = mc.β_ɣ
         mu = mc.μ_e
         v = mc.𝜎_e
-
-        log_message("parameter setting $i (of $(length(all_model_configs))): alpha=$alpha, beta=$beta mu=$mu var=$v")
+        Base.Threads.atomic_add!(cnt, 1)
+        log_message("parameter setting $(cnt[]) (of $(length(all_model_configs))): alpha=$alpha, beta=$beta mu=$mu var=$v")
         # TODO: run each model multiple times (e.g. 10) and collect prediction results
         # report mean and variance of those predictions
         # log_message("calling parameter_inference method")
