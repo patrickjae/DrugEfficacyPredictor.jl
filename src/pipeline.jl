@@ -1,3 +1,79 @@
+function log_progress(experiment::Experiment, s::String)
+    push!(training_progress[experiment.internal_id], s)
+end
+
+
+function train(experiment::Experiment, data::Dict{String, Any})
+    log_message("in train method")
+    # try
+        # extract inference config
+        inference_config = read_inference_configuration(data)
+        log_progress(experiment, "read inference configuration")
+        log_message("read inference config")
+        model_config = nothing
+        # if do_gridsearch is false, extract the model config
+        if !inference_config.do_gridsearch
+            model_config = read_model_configuration(data)
+        end
+        log_progress(experiment, "read model configuration")
+        log_message("read model config")
+        # run the model
+        # TODO: extract whether to subsume pathway information and do variance filtering
+        dep = create_drug_efficacy_predictor(experiment, inference_config)
+        temp_dir = mktempdir()
+        inference_config.target_dir = temp_dir
+
+        log_progress(experiment, "running model computations")
+        if inference_config.do_cross_validation
+            run_cross_validation(dep, inference_config = inference_config, model_config = model_config)
+        else
+            run_model(dep, inference_config = inference_config, model_config = model_config)
+        end
+        log_progress(experiment, "preparing results for download")
+        # compile the results and store model for prediction
+        zip_target = inference_config.target_dir
+        if endswith(inference_config.target_dir, "/") zip_target = chop(zip_target) end
+        zip_results_cmd = `zip -r $(zip_target) $(joinpath(inference_config.target_dir, "*"))`
+        run(zip_results_cmd)
+        log_progress(experiment, "finished, results ready for download")
+        result_file_dictionary[experiment.internal_id] = zip_target
+    # catch ex
+    #     st = map(string, stacktrace(catch_backtrace()))
+    #     # log_progress(experiment, "exception has occurred: $(typeof(ex))")
+    #     log_progress(experiment, "stacktrace: $(join(st, "\n"))")
+    #     @info "caught exception..." st
+    # end
+end
+
+function predict(experiment::Experiment, data::Dict{String, Any})
+    inference_config = read_inference_configuration(data)
+    log_progress(experiment, "read inference configuration")
+    if inference_config.do_gridsearch
+        throw(ArgumentError("Prediction not implemented for gridsearch"))
+    end
+    model_config = read_model_configuration(data)
+    log_progress(experiment, "read model configuration")
+    dep = create_drug_efficacy_predictor(experiment, inference_config)
+
+    log_progress(experiment, "training model")
+    (lls, errs, test_errs, model, convergence) = parameter_inference(dep, inference_config = inference_config, model_config = model_config)
+    log_progress(experiment, "predicting efficacy on provided cell lines")
+    prediction_cell_lines = create_cell_lines(experiment, data, for_prediction = true)
+    (predictions, ranks) = predict_outcomes(dep, model, prediction_cell_lines)
+    result_dictionary = Dict{String, Any}()
+    for (t, drug) in enumerate(keys(dep.experiment.results))
+        result_dictionary[drug.id] = Dict{String, Any}()
+        for (cl_idx, cl) in enumerate(prediction_cell_lines)
+            result_dictionary[drug.id][cl.id] = Dict{String, Any}()
+            result_dictionary[drug.id][cl.id]["prediction"] = predictions[drug][cl_idx]
+            result_dictionary[drug.id][cl.id]["rank"] = ranks[drug][cl_idx]
+        end
+    end
+    log_progress(experiment, "finished")
+    result_dictionary
+end
+
+
 function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10, inference_config::InferenceConfiguration = InferenceConfiguration(), model_config::Union{Nothing, ModelConfiguration} = nothing)
     if !inference_config.do_cross_validation
         throw(ArgumentError("run_cross_validation called without proper inference configuration, make sure the do_cross_validation flag is set to true"))
@@ -7,6 +83,8 @@ function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10
     cls_per_fold = Int64(floor(num_cl/num_folds))
 
     for i in 1:num_folds
+        log_progress(dep.experiment, "starting computation of fold $i in CV")
+        log_message("starting fold $i")
         start_idx = (i-1)*cls_per_fold + 1
         end_idx = i==num_folds ? num_cl : i*cls_per_fold
 
@@ -19,6 +97,7 @@ function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10
             end
         end
         inference_config.fold_num = i
+        log_message("calling run_model")
         run_model(dep, inference_config = inference_config, model_config = model_config)
     end
 end
@@ -53,10 +132,10 @@ end
 
 function run_model(dep; inference_config::InferenceConfiguration = InferenceConfiguration(), model_config::Union{Nothing, ModelConfiguration} = nothing)
     # things to do only once (or once per fold)
-
+    log_message("in run model")
     # compute kernels and cross kernels depending on which cell lines are in the training and test set
     set_training_test_kernels(dep)
-
+    log_message("set training test kernels")
     # result dir is the target directory amended by the fold
     result_dir = inference_config.do_cross_validation ? joinpath(inference_config.target_dir, string(inference_config.fold_num)) : inference_config.target_dir
     mkpath(result_dir)
@@ -73,7 +152,7 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
         # 2) create random predictions from these
         script_name = joinpath(PROJECT_ROOT, "analytics", "create_random_predictions.pl")
         rand_pred_dir = joinpath(result_dir, "random_predictions")
-        mkdir(rand_pred_dir)
+        mkpath(rand_pred_dir)
         create_rand_pred_cmd = `perl $script_name $training_response_file $test_response_file $rand_pred_dir 100`
         run(create_rand_pred_cmd)
         # 3) calculate z-scores
@@ -90,9 +169,13 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
 
         wpc_summary_file = joinpath(inference_config.target_dir, "wpc_summary.txt")
 
+        file = open(wpc_summary_file, "w")
+        @printf(file, "ranking file\taverage probabilistic c-index\tweighted average probabilistic c-index\twpc p-value\n")
+        close(file)
+
         wpc_script_gs_cmd = `perl $script_name $sd_file $test_response_file $zscore_file $gold_standard_file $wpc_target_file $wpc_summary_file`
     end
-
+    log_message("generating model configs")
     all_model_configs = ModelConfiguration[]
     # if doing gridsearch, create model configs to use
     if inference_config.do_gridsearch
@@ -106,45 +189,75 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
             mc.μ_b = 0.
             push!(all_model_configs, mc)
         end
+        log_message("generated gridsearch configs ($(length(all_model_configs)))")
     #  else just use the model config as provided in the call
     else
         model_config == nothing ?
             throw(ArgumentError("not doing a grid search but no model configuration specified")) :
             push!(all_model_configs, model_config)
     end
-    all_errors = String[]
+    all_errors = Vector{String}(undef, length(all_model_configs))
+    # predictions = Vector{Dict{Drug, Vector{Float64}}}(undef, length(all_model_configs))
+    # ranks = Vector{Dict{Drug, Vector{Int64}}}(undef, length(all_model_configs))
+    # models = Vector{PredictionModel}(undef, length(all_model_configs))
     # do the actual inference sweep
-    for mc in all_model_configs
-        # TODO: this assumes we are using the same values for all params, maybe change later
-        # same for the generic filenam below 
-        alpha = mc.⍺_ɣ
-        beta = mc.β_ɣ
-        mu = mc.μ_e
-        v = mc.𝜎_e
+    log_message("running model configurations")
+    Threads.@threads for i in 1:length(all_model_configs)
+        try
+            mc = all_model_configs[i]
+            # TODO: this assumes we are using the same values for all params, maybe change later
+            # same for the generic filenam below
+            alpha = mc.⍺_ɣ
+            beta = mc.β_ɣ
+            mu = mc.μ_e
+            v = mc.𝜎_e
 
-        @info "parameter setting" alpha beta mu v
+            log_message("parameter setting: alpha=$alpha, beta=$beta mu=$mu var=$v")
+            # TODO: run each model multiple times (e.g. 10) and collect prediction results
+            # report mean and variance of those predictions
+            log_message("calling parameter_inference method")
+            (lls, errs, test_errs, model, convergence) = parameter_inference(dep, inference_config = inference_config, model_config = mc)
+            log_message("inference stats: likelihood=$(lls[end]) train_error=$(errs[end]) test_error=$(test_errs[end]) convergence=$convergence")
+            # models[i] = model
+            error_string = inference_config.do_cross_validation ?
+                "$alpha\t$beta\t$mu\t$v\t$(inference_config.fold_num)\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n" :
+                "$alpha\t$beta\t$mu\t$v\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n"
+            all_errors[i] = error_string
 
-        (lls, errs, test_errs, model, convergence) = parameter_inference(dep, inference_config = inference_config, model_config = mc)
-        @info "inference stats" likelihood=lls[end] train_error=errs[end] test_error=test_errs[end] convergence
+            (p, r) = predict_outcomes(dep, model, collect(values(dep.experiment.cell_lines)))
+            # predictions[i] = p
+            # ranks[i] = r
 
-        error_string = inference_config.do_cross_validation ? 
-            "$alpha\t$beta\t$mu\t$v\t$(inference_config.fold_num)\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n" :
-            "$alpha\t$beta\t$mu\t$v\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n"
-        push!(all_errors, error_string)
 
-        (predictions, ranks) = predict_outcomes(dep, model, collect(values(dep.experiment.cell_lines)))
+            generic_filename =  "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt"
+            # writing result files
+            log_message("writing results")
+            write_results(dep, result_dir, generic_filename, p, r, model)
 
-        generic_filename =  "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt"
-        # writing result files
-        write_results(dep, result_dir, generic_filename, predictions, model)
+            resulting_ranking = joinpath(result_dir, "ranking", generic_filename)
 
-        resulting_ranking = joinpath(result_dir, "ranking", generic_filename)
+            if inference_config.compute_wpc_index
+                wpc_script_cmd = `perl $script_name $sd_file $test_response_file $zscore_file $resulting_ranking $wpc_target_file $wpc_summary_file`
+                run(wpc_script_cmd)
+            end
 
-        if inference_config.compute_wpc_index
-            wpc_script_cmd = `perl $script_name $sd_file $test_response_file $zscore_file $resulting_ranking $wpc_target_file $wpc_summary_file`
-            run(wpc_script_cmd)
+            log_message("done predicting")
+        catch ex
+            st = map(string, stacktrace(catch_backtrace()))
+            log_message("caught exception: $ex")
+            log_message("stacktrace")
+            [log_message(ste) for ste in st]
         end
     end
+
+    # for i in 1:length(all_model_configs)
+    #     mc = all_model_configs[i]
+    #     alpha = mc.⍺_ɣ
+    #     beta = mc.β_ɣ
+    #     mu = mc.μ_e
+    #     v = mc.𝜎_e
+    #
+    # end
 
     # write the errors file
     f = open(joinpath(inference_config.target_dir, "errors.txt"), "a")
@@ -242,7 +355,7 @@ function set_training_test_kernels(dep::DrugEfficacyPrediction)
 
 
 
-function write_results(dep::DrugEfficacyPrediction, parent_dir::String, filename::String, predictions::Dict{Drug, Vector{Float64}}, m::PredictionModel)
+function write_results(dep::DrugEfficacyPrediction, parent_dir::String, filename::String, predictions::Dict{Drug, Vector{Float64}}, ranks::Dict{Drug, Vector{Int64}}, m::PredictionModel)
     # write predictions and true values
     mkpath(joinpath(parent_dir,"prediction"))
     prediction_file = joinpath(parent_dir, "prediction", filename)
@@ -271,8 +384,8 @@ function write_results(dep::DrugEfficacyPrediction, parent_dir::String, filename
     # write rankings
     mkpath(joinpath(parent_dir,"ranking"))
     ranking_file = joinpath(parent_dir, "ranking", filename)
-    ranks = Dict{Drug, Vector{Int64}}()
-    # we predict neg log values, i.e. higher value means lower concentration 
+    # ranks = Dict{Drug, Vector{Int64}}()
+    # we predict neg log values, i.e. higher value means lower concentration
     # which means higher susceptibility of the cell line to the drug and thus higher rank (lower number)
     # hence, we sort in reverse order
     for d in collect(keys(predictions))
