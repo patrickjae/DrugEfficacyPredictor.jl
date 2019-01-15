@@ -1,3 +1,5 @@
+using Distributions
+
 abstract type ModelParameter end
 
 mutable struct GammaParameter <: ModelParameter

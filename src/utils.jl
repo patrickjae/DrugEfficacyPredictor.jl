@@ -27,7 +27,7 @@ function run_dreamchallenge_data(pathways_file::AbstractString, dest_dir::Abstra
     # 2)
     do_experiment_stack(joinpath(dest_dir, "const_exome"), experiment, pathways_file)
 
-    run(srv_shutdown_cmd)
+    @async run(srv_shutdown_cmd)
     nothing
 end
 
@@ -37,18 +37,21 @@ function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_
     ic.do_gridsearch = true
     ic.compute_wpc_index = true
     # a
-    dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false)
+    ic.do_variance_filtering = false
+    dep = create_drug_efficacy_predictor(experiment, ic)
     ic.target_dir = joinpath(dest_dir, "full_data_no_pathways")
     run_model(dep, inference_config = ic)
 
     run(add_pathways_cmd)
     # c
-    dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false, subsume_pathways = false)
+    ic.subsume_pathways = false
+    dep = create_drug_efficacy_predictor(experiment, ic)
     ic.target_dir = joinpath(dest_dir, "full_data_full_pathways")
     run_model(dep, inference_config = ic)
 
     # e
-    dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = false, subsume_pathways = true)
+    ic.subsume_pathways = true
+    dep = create_drug_efficacy_predictor(experiment, ic)
     ic.target_dir = joinpath(dest_dir, "full_data_sub_pathways")
     run_model(dep, inference_config = ic)
 
@@ -56,19 +59,22 @@ function do_experiment_stack(dest_dir::String, experiment::Experiment, pathways_
     empty!(experiment.pathway_information)
 
     # b
-    dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true)
+    ic.do_variance_filtering = true
+    dep = create_drug_efficacy_predictor(experiment, ic)
     ic.target_dir = joinpath(dest_dir, "var_filter_data_no_pathways")
     run_model(dep, inference_config = ic)
 
     # add pathways again
     run(add_pathways_cmd)
     # d
-    dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true, subsume_pathways = false)
+    ic.subsume_pathways = false
+    dep = create_drug_efficacy_predictor(experiment, ic)
     ic.target_dir = joinpath(dest_dir, "var_filter_data_full_pathways")
     run_model(dep, inference_config = ic)
 
     # f
-    dep = create_drug_efficacy_predictor(experiment, do_variance_filtering = true, subsume_pathways = true)
+    ic.subsume_pathways = true
+    dep = create_drug_efficacy_predictor(experiment, ic)
     ic.target_dir = joinpath(dest_dir, "var_filter_data_sub_pathways")
     run_model(dep, inference_config = ic)
 

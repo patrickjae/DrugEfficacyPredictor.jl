@@ -118,7 +118,7 @@ print STDERR "There are " . keys(%preds) . " cell lines and $#drugs drugs in the
 die "There is an error in your submission file.  Please make sure the first id in the first row (header row) is \"DrugAnonID\"\n" if $#drugs < 30;
 # die "Please make sure the submission file is titled \"dream7_drugsensitivity1_predictions_<team name>.csv\"\n" if $infile !~ /dream7\_drugsensitivity1\_predictions/;
 
-open(my $fh, "$target_file");
+open(my $fh, ">$target_file");
 
 print $fh "DrugID\tprobabalistic c-index\tweighted probabalistic c-index\n";
 
@@ -158,7 +158,7 @@ print $fh "The final team rankings are based on the weighted average probablisti
 close($fh);
 
 open(my $fh, ">>$summary_file");
-print $fh "$infile\t$ws\n";
+print $fh "$infile\t$oas\t$ws\t$pv\n";
 close($fh);
 exit;
 

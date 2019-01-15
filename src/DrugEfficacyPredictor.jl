@@ -1,16 +1,19 @@
 module DrugEfficacyPredictor
-using CSV, DataFrames, DataStructures, Distributions, SpecialFunctions, Printf,
+
+using CSV, DataFrames, SpecialFunctions, Printf,
 	Statistics, LinearAlgebra
-include("../init.jl")
+
 include("distributional_parameters.jl")
 include("types.jl")
+include("../init.jl")
 include("data_handling.jl")
 include("dream_challenge_data.jl")
 include("iorio.jl")
 include("webservice.jl")
 
-include("import_json.jl")
-include("export_json.jl")
+include("create.jl")
+include("get.jl")
+include("delete.jl")
 include("model_initialization.jl")
 include("inference.jl")
 include("prediction.jl")
