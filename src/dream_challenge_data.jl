@@ -1,8 +1,9 @@
 function load_dream_challenge_data()
 	directory = joinpath(PROJECT_ROOT, "data", "dream_challenge")
-	@info "importing dream challenge data from $directory"
+	log_message("importing dream challenge data from $directory")
 	experiment = create_experiment()
 	experiments_dictionary["dream_challenge"] = experiment
+	training_progress["dream_challenge"] = Vector{String}()
 	for f in readdir(directory)
 		if !endswith(f,".txt") || endswith(f, "README.txt")
 			continue
@@ -17,7 +18,7 @@ function load_dream_challenge_data()
 		elseif data_type_string == "Methylation"
 			data_type = Methylation
 		elseif data_type_string == "RNAseq_expressed_calls"
-			data_type = RNASeqCall			
+			data_type = RNASeqCall
 		elseif data_type_string == "RNAseq_quantification"
 			data_type = RNASeq
 		elseif data_type_string == "RPPA"
@@ -28,16 +29,16 @@ function load_dream_challenge_data()
 		elseif data_type_string == "Drug_Response_Training" || data_type_string == "test_data"
 			# responses
 		else
-			@warn "couldn't determine data type" data_type_string
+			log_message("couldn't determine data type $data_type_string")
 			continue
 		end
-		@info "importing file" f
+		log_message("importing file $f")
 		# make nullable
 		df = CSV.read(joinpath(directory, f), DataFrame, delim='\t',rows_for_type_detect=1200, missingstring="NA", strings=:raw)
 		if data_type_string == "Drug_Response_Training"
 			df = CSV.read(joinpath(directory, f), DataFrame, delim='\t',rows_for_type_detect=1200, missingstring="NA", strings=:raw)
 		end
-		@info "creating genes or proteins..."
+		log_message("creating genes or proteins...")
 		if data_type_string == "Drug_Response_Training" || data_type_string == "test_data"
 			drugs = names(df)[2:end]
 			# println(typeof(df[:CellLine]))
@@ -66,7 +67,7 @@ function load_dream_challenge_data()
 				add_protein(experiment, p_row[:Antibody_ID], fully_validated = is_fully_validated)
 			end
 			i += 1
-			if i%5000 == 0 @info "processed $i of $n proteins..." end
+			if i%5000 == 0 log_message("processed $i of $n proteins...") end
 		else
 			i = 1
 			n = size(df, 1)
@@ -84,7 +85,7 @@ function load_dream_challenge_data()
 				if in(:EntrezID, df_names)
 					has_entrez_id = true
 					entrez_id = data_row[:EntrezID]
-					try 
+					try
 						gene_object = get_gene(experiment, entrez_id)
 					catch end
 				end
@@ -121,7 +122,7 @@ function load_dream_challenge_data()
 						if has_hgnc_id add_gene_id!(experiment, gene_object, hgnc_id, "hgnc_id") end
 					else
 						# check if object had no entrez id before
-						if gene_object.entrez_id == -1 
+						if gene_object.entrez_id == -1
 							add_gene_id!(experiment, gene_object, entrez_id, "entrez_id")
 						else
 							# found gene object has another entrez id (which is unique) so create a new gene
@@ -163,10 +164,10 @@ function load_dream_challenge_data()
 					gene_object.cancer_gene = is_cancer_gene
 				end
 				i+=1
-				if i%5000 == 0 @info "processed $i of $n genes..." end
+				if i%5000 == 0 log_message("processed $i of $n genes...") end
 			end
 		end
-		@info "importing cell line data for $data_type"
+		log_message("importing cell line data for $data_type")
 		try
 			for cl in get_cell_line_names_from_data_frame(data_type, df)
 				cl_obj = get_cell_line!(experiment, cl, "Breast cancer")
@@ -178,7 +179,7 @@ function load_dream_challenge_data()
 			rethrow(exc)
 		end
 	end
-	@info "number of genes now:" Entrez=length(experiment.genes) HGNC=length(experiment.genes_by_hgnc) Ensembl=length(experiment.genes_by_ensembl)
+	log_message("number of genes now: Entrez=$(length(experiment.genes)), HGNC=$(length(experiment.genes_by_hgnc)) Ensembl=$(length(experiment.genes_by_ensembl))")
 	experiment
 end
 
@@ -213,19 +214,19 @@ function populate_data_view!(data_view::DataView{Gene,ExomeSeq}, df::DataFrame, 
 		variant_dist3effective_avg = data_row[Symbol("DistanceEffective3'end(alt)")]
 		details = data_row[:Details]
 		# data_summary = reference_mismatch_avg + variant_mismatch_avg + reference_mismatch_sum + variant_mismatch_sum + reference_dist3effective_avg + variant_dist3effective_avg
-		
+
 		#create some exome data view, create a key type for exome sequencing as a combination
 		#of gene and protein change
 		# exome_data = ExomeSeq(num_cosmic, variant_effect, protein_change,
-		# 		nucleotid_change, variant_confidence, 
+		# 		nucleotid_change, variant_confidence,
 		# 		norm_zygosity, norm_reference_count, norm_variant_count,
 		# 		tumor_zygosity, tumor_reference_count, tumor_variant_count,
 		# 		reference_mismatch_avg, variant_mismatch_avg,
 		# 		reference_mismatch_sum, variant_mismatch_sum,
 		# 		reference_dist3effective_avg, variant_dist3effective_avg,
 		# 		details, data_summary)
-		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg, 
-								reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum, 
+		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg,
+								reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum,
 								variant_mismatch_avg=variant_mismatch_avg, variant_dist3effective_avg=variant_dist3effective_avg,
 								num_cosmic=num_cosmic, variant_effect=variant_effect, nucleotid_change=nucleotid_change, variant_confidence=variant_confidence,
 								norm_zygosity=norm_zygosity, norm_reference_count=norm_reference_count, norm_variant_count=norm_variant_count,
