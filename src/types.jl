@@ -1,8 +1,17 @@
+using DataStructures
+
 ##############################################################################################################
 ##############################################################################################################
 ########################################         DATA          ###############################################
 ##############################################################################################################
 ##############################################################################################################
+export Gene, Protein, GeneExpression, Methylation,
+	RNASeq, RNASeqCall, ExomeSeq, RPPA, CNV,
+	Drug, Pathway, DataView, CellLine, Outcome,
+	Experiment, DrugEfficacyPrediction,
+	ModelConfiguration, InferenceConfiguration,
+	PredictionModel
+
 """ An abstract type for samples, can be cell line or human tissue (latter not yet implemented) """
 abstract type Sample end
 
@@ -17,7 +26,7 @@ abstract type SingleViewType <: ValueViewType end
 
 abstract type VectorViewType <: ValueViewType end
 
-""" 
+"""
 A gene. Mostly represented by its HGNC ID in the motivating Dreamchallenge data set.
 Preferred ID is Entrez ID, Ensembl-ID can be stored as well.
 As an additional data if available, can hold information on being a cancer gene.
@@ -40,7 +49,7 @@ mutable struct Gene
 	Gene(entrez_id::Int64, is_cancer_gene::Bool=false) = new(entrez_id, "", "", is_cancer_gene)
 end
 
-""" 
+"""
 A protein. If available, paralogs of the protein that are affected by the same antibody are encoded in the hgnc_id.
 The field antibody_validated indicates whether cross-reactivity in the assay has been checked
 and the antibodies behave linearly in the dilution series.
@@ -77,7 +86,7 @@ mutable struct GeneExpression <: SingleViewType
 	GeneExpression(expression_value::Float64) = new(expression_value, expression_value)
 end
 
-""" 
+"""
 Illumina beta values indicating methylation.
 CGct1 gives the number of CG dinucleotides in the probe sequence. The
 U and M probes differ only at C's in CpG dinucleotides so there is a
@@ -109,7 +118,7 @@ end
 """
 Whole transcriptome shotgun sequencing (RNA-seq) data.
 Expression value is a fpkm value.
-expression_status is 1 if the Ensembl gene model was detected above 
+expression_status is 1 if the Ensembl gene model was detected above
 the background noise level.
 """
 mutable struct RNASeq <: SingleViewType
@@ -120,7 +129,7 @@ end
 
 """
 Whole transcriptome shotgun sequencing (RNA-seq) data.
-expression_status is 1 if the Ensembl gene model was detected above 
+expression_status is 1 if the Ensembl gene model was detected above
 the background noise level.
 """
 mutable struct RNASeqCall <: SingleViewType
@@ -146,12 +155,12 @@ tumor_zygosity - Zygosity (hom, het) of Cell Line
 tumor_reference_count - # Reference alleles at position in cell line
 tumor_variant_count - # Alternate alleles at position in cell line
 reference_mismatch_avg - METRIC: Average number of other mismatching bases in reads with reference base
-variant_mismatch_avg - METRIC: Average number of other mismatching bases in reads with variant 
+variant_mismatch_avg - METRIC: Average number of other mismatching bases in reads with variant
 reference_mismatch_sum - METRIC: Base quality sum of mismatching bases in reads with reference base
 variant_mismatch_sum - METRIC: Base quality sum of mismatching bases in reads with variant
 reference_dist3effective_avg - METRIC: Average normalized distance of reference bases from 3' end of their respective reads
 variant_dist3effective_avg - METRIC: Average normalized distance of variant bases from 3' end of their respective reads
-details - Various other information collected at this position. 
+details - Various other information collected at this position.
 """
 mutable struct ExomeSeq <: VectorViewType
 	num_cosmic::Int64
@@ -173,8 +182,8 @@ mutable struct ExomeSeq <: VectorViewType
 	variant_dist3effective_avg::Float64
 	details::String
 	normalized_value::Float64
-	function ExomeSeq(protein_change::AbstractString; reference_mismatch_sum::Float64=0., reference_mismatch_avg::Float64=0., 
-		reference_dist3effective_avg::Float64=0., variant_mismatch_sum::Float64=0., variant_mismatch_avg::Float64=0., 
+	function ExomeSeq(protein_change::AbstractString; reference_mismatch_sum::Float64=0., reference_mismatch_avg::Float64=0.,
+		reference_dist3effective_avg::Float64=0., variant_mismatch_sum::Float64=0., variant_mismatch_avg::Float64=0.,
 		variant_dist3effective_avg::Float64=0., num_cosmic::Int64=0, variant_effect::AbstractString="", nucleotid_change::AbstractString="",
 		variant_confidence::Float64=1., norm_zygosity::AbstractString="", norm_reference_count::Float64=0., norm_variant_count::Float64=0.,
 		tumor_zygosity::AbstractString="", tumor_reference_count::Float64=0., tumor_variant_count::Float64=0., details::AbstractString="")
@@ -204,11 +213,11 @@ mutable struct CNV <: SingleViewType
 	CNV(gene_level_cnv::Float64) = new(gene_level_cnv, gene_level_cnv)
 end
 
-""" 
+"""
 A drug, identified by a name.
 Additional information may include knowledge about affected genes to
 refine the number of features for predictions, this is useful for incorporating pathway information.
-One useful approach could be to look at the generic pathways and select only those 
+One useful approach could be to look at the generic pathways and select only those
 that are in a known pathway.
 More specific would be to select only genes of the pathway that is affected by a drug.
 
@@ -255,8 +264,8 @@ struct DataView{K <: KeyType, V <: ViewType}
 end
 
 
-""" 
-A cell line comprised with its ID, information on the cancer type and 
+"""
+A cell line comprised with its ID, information on the cancer type and
 dictionary of views, i.e. different data collected for this cell line.
 """
 mutable struct CellLine <: Sample
@@ -270,7 +279,7 @@ end
 """
 An experimental outcome.
 An outcome should be associated with a drug.
-The dictionary of outcome values associates the results to cell lines. 
+The dictionary of outcome values associates the results to cell lines.
 The reason for this is, that we believe the outcome across different
 cell lines is correlated according to the molecular structure of the cell line tissue.
 In other words, we model the outcome on available cell lines jointly.
@@ -293,8 +302,8 @@ end
 # 	Prediction() = new(Dict{Drug, Float64}(), Dict{Drug,Int64}())
 # end
 
-""" 
-An experiment comprised of measurements (where each is associated 
+"""
+An experiment comprised of measurements (where each is associated
 with a cell line) and results. This data structure holds all data that is provided
 by the user, i.e. including pathway information, different data views, training and test responses etc.
 """
@@ -309,22 +318,24 @@ mutable struct Experiment
 	proteins::Dict{String, Protein}
 	views::OrderedSet{Type{<:ViewType}}
 	statistics::Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}
-	pathway_information::OrderedSet{Pathway}
+	pathway_information::OrderedDict{String, Pathway}
 	is_normalized::Bool
+	internal_id::String
 	function Experiment()
 		new(
 			OrderedDict{Drug, Outcome}(), # results
 			# OrderedDict{Drug, Outcome}(), # test results
 			OrderedDict{String, CellLine}(), # cell_lines
-			Dict{String, Drug}(), # drugs 
+			Dict{String, Drug}(), # drugs
 			Dict{Int64, Gene}(), # genes
 			Dict{String, Gene}(), # genes by hgnc
 			Dict{String, Gene}(), # genes by ensembl
 			Dict{String, Protein}(), # proteins
 			OrderedSet{Type{<:ViewType}}(), # views
 			Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}(), # statistics
-			OrderedSet{Pathway}(), #pathways
-			false # is normalized
+			OrderedDict{String, Pathway}(), #pathways
+			false, # is normalized
+			""
 			)
 	end
 end
@@ -355,18 +366,19 @@ mutable struct DrugEfficacyPrediction
 	T::Int64
 	K::Int64
 	N::Vector{Int64}
-	function DrugEfficacyPrediction(experiment::Experiment, T::Int64, K::Int64, N::Vector{Int64}) 
+	subsume_pathways::Bool
+	function DrugEfficacyPrediction(experiment::Experiment, T::Int64, K::Int64, N::Vector{Int64})
 		new(
-			experiment, 
+			experiment,
 			OrderedDict{Type{<:ViewType}, Matrix{Float64}}(),
 			OrderedDict{Type{<:ViewType}, Vector{Matrix{Float64}}}(),
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(),
 			OrderedDict{Drug, Vector{Float64}}(),
 			OrderedDict{Drug, Vector{Matrix{Float64}}}(),
 			OrderedDict{Drug, Vector{Float64}}(),
-			OrderedDict{Drug, Vector{Matrix{Float64}}}(), 
+			OrderedDict{Drug, Vector{Matrix{Float64}}}(),
 			OrderedDict{Drug, Vector{Float64}}(),
-			T, K, N
+			T, K, N, true
 		)
 	end
 end
@@ -394,7 +406,7 @@ mutable struct ModelConfiguration
 	β_⍵::Float64
 	# normal params for mean on bias
 	μ_b::Float64
-	𝜎_0::Float64
+	𝜎_b::Float64
 	# normal params for mean on kernel weights
 	μ_e::Float64
 	𝜎_e::Float64
@@ -405,7 +417,7 @@ mutable struct ModelConfiguration
 	μ_g::Float64
 	Σ_g::Float64
 
-	ModelConfiguration(⍺::Float64, β::Float64, μ::Float64, 𝜎::Float64) = new(⍺, β, ⍺, β, ⍺, β, ⍺, β, ⍺, β, μ, 𝜎, μ, 𝜎, μ, 𝜎, μ, 𝜎)
+	ModelConfiguration(⍺::Float64, β::Float64, μ::Float64, 𝜎::Float64) = new(⍺, β, ⍺, β, ⍺, β, ⍺, β, ⍺, β, 0., 𝜎, μ, 𝜎, μ, 𝜎, μ, 𝜎)
 	ModelConfiguration() = new(1000., 1000., 1000., 1000., 1000., 1000., 1000., 1000., 1000., 1000., 0., 2., 1., 2., 1., 2., 1., 2.)
 end
 
@@ -418,8 +430,10 @@ mutable struct InferenceConfiguration
 	do_gridsearch::Bool
 	do_cross_validation::Bool
 	compute_wpc_index::Bool
+	subsume_pathways::Bool
+	do_variance_filtering::Bool
 
-	InferenceConfiguration() = new(1e-3, 5, 200, "results/", 1, false, false, false)
+	InferenceConfiguration() = new(1e-3, 5, 200, "results/", 1, false, false, false, true, true)
 end
 mutable struct PredictionModel
 	# precision parameters, T-dimensional, one per drug/task
@@ -462,7 +476,7 @@ mutable struct PredictionModel
 		p.b = Vector{NormalParameter}(undef, T)
 		for t in 1:T
 			p.ɣ[t] = GammaParameter(model_config.⍺_ɣ, model_config.β_ɣ)
-			p.b[t] = NormalParameter(model_config.μ_b, model_config.𝜎_0)
+			p.b[t] = NormalParameter(model_config.μ_b, model_config.𝜎_b)
 			set_variable_name(p.ɣ[t], "ɣ[$t]")
 			set_variable_name(p.b[t], "b[$t]")
 		end
