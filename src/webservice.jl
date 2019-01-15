@@ -58,16 +58,9 @@ function train_request(req::HTTP.Request)
     end
     experiment = experiments_dictionary[experiment_id]
     log_message("starting train method")
-    @async begin
-        try
-            train(experiment, request_dictionary)
-        catch ex
-            st = map(string, stacktrace(catch_backtrace()))
-            log_message("caught exception $ex")
-            log_message("stacktrace")
-            [log_message(ste) for ste in st]
-        end
-    end
+
+    @async train(experiment, request_dictionary)
+
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Training in progress, check via /experiments/$experiment_id/progress. Once results are ready for download, access them via /experiments/$experiment_id/results.")))
     req.response
