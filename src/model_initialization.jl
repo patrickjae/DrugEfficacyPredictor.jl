@@ -153,12 +153,12 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
         end
         # compute the base kernel for this view
         kct = @elapsed base_kernels[v] = compute_kernel(data_views...)
-        if cell_lines_test != nothing
+        if cell_lines_test == nothing
             log_message("computing base kernel for $v $kct seconds)")
         end
         K += 1
         if length(experiment.pathway_information) != 0
-            if cell_lines_test != nothing
+            if cell_lines_test == nothing
                 log_message("computing pathway specific kernels...")
             end
             pathway_specific_kernels[v] = Vector{Matrix{Float64}}()
@@ -205,16 +205,16 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
                 end
             # # method 2 end
             end
-            if cell_lines_test != nothing
+            if cell_lines_test == nothing
                 log_message("computing pathway specific kernels for $v took $tt seconds)")
             end
         else
-            if cell_lines_test != nothing
+            if cell_lines_test == nothing
                 log_message("Note: no pathway information provided")
             end
         end
     end
-    if cell_lines_test != nothing
+    if cell_lines_test == nothing
         log_message("done computing kernels")
     end
     (K, base_kernels, pathway_specific_kernels)
