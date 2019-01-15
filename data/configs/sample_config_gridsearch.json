@@ -1,0 +1,12 @@
+{
+    "inference_configuration":
+    {
+        "convergence_criterion" : 1e-3,
+        "min_iter" : 10,
+        "max_iter" : 50,
+        "do_gridsearch" : true,
+        "do_cross_validation" : true,
+        "do_variance_filtering" : true,
+        "subsume_pathways" : true
+    }
+}
