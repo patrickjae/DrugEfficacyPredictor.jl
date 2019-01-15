@@ -1,9 +1,9 @@
-""" 
+"""
 Creates a Cell line object from JSON. Creates Gene (or Protein) objects on the fly as needed.
 """
-function import_cell_line(experiment::Experiment, data::Dict{String, Any})
-	@info "fetching/creating cell line..."
-	cl = get_cell_line(experiment, data)
+function create_cell_line(experiment::Experiment, data::Dict{String, Any}; for_prediction::Bool=false)
+	log_message("fetching/creating cell line...")
+	cl = get_cell_line(experiment, data, for_prediction = for_prediction)
 	if haskey(data, "views")
 		# construct the views
 		views = data["views"]
@@ -23,18 +23,18 @@ function import_cell_line(experiment::Experiment, data::Dict{String, Any})
 	end
 end
 
-function import_cell_lines(experiment::Experiment, data::Dict{String, Any})
-    @info "importing cell lines"
+function create_cell_lines(experiment::Experiment, data::Dict{String, Any}; for_prediction::Bool=false)
+    log_message("importing cell lines")
     if haskey(data, "cell_lines")
         cell_lines = data["cell_lines"]
         for cl in cell_lines
-            import_cell_line(experiment, cl)
+            create_cell_line(experiment, cl, for_prediction = for_prediction)
         end
     end
 end
 
-function import_genes(experiment::Experiment, data::Dict{String, Any})
-    @info "importing genes"
+function create_genes(experiment::Experiment, data::Dict{String, Any})
+    log_message("importing genes")
     if haskey(data, "genes")
         for gene in data["genes"]
             add_gene(experiment, gene)
@@ -42,8 +42,8 @@ function import_genes(experiment::Experiment, data::Dict{String, Any})
     end
 end
 
-function import_proteins(experiment::Experiment, data::Dict{String, Any})
-    @info "importing proteins"
+function create_proteins(experiment::Experiment, data::Dict{String, Any})
+    log_message("importing proteins")
     if haskey(data, "proteins")
         for protein in data["proteins"]
             add_protein(experiment, protein)
@@ -51,8 +51,8 @@ function import_proteins(experiment::Experiment, data::Dict{String, Any})
     end
 end
 
-function import_drugs(experiment::Experiment, data::Dict{String, Any})
-    @info "importing drugs"
+function create_drugs(experiment::Experiment, data::Dict{String, Any})
+    log_message("importing drugs")
     if haskey(data, "drugs")
         for drug in data["drugs"]
             add_drug(experiment, drug)
@@ -60,31 +60,31 @@ function import_drugs(experiment::Experiment, data::Dict{String, Any})
     end
 end
 
-function import_outcomes(experiment::Experiment, data::Dict{String, Any})
-    @info "importing outcomes"
+function create_outcomes(experiment::Experiment, data::Dict{String, Any})
+    log_message("importing outcomes")
     if !haskey(data, "outcome_type")
         throw(ArgumentError("No outcome type specified."))
     end
     outcome_type = data["outcome_type"]
     # TODO: change to "outcomes"
-    if !haskey(data, "drugs")
+    if !haskey(data, "outcomes")
         throw(ArgumentError("No outcomes specified, provide a dictionary of drug => outcome under the identifier 'outcomes'"))
     end
-    outcomes = data["drugs"]
+    outcomes = data["outcomes"]
     for (drug_name, outcome_data) in outcomes
-        @info "importing outcome for drug" drug_name
+        log_message("importing outcome for drug $drug_name")
         drug = get_drug!(experiment, drug_name)
         add_outcome(experiment, drug, outcome_data, outcome_type = outcome_type)
     end
 end
 
-function import_pathways(experiment::Experiment, data::Dict{String, Any})
-    @info "importing pathway information"
+function create_pathways(experiment::Experiment, data::Dict{String, Any})
+    log_message("importing pathway information")
     if haskey(data, "pathways")
         pathways = data["pathways"]
         for pathway_data in pathways
             add_pathway(experiment, pathway_data)
-            @info "done for $(pathway_data["name"])"
+            log_message("done for $(pathway_data["name"])")
         end
     end
 end
@@ -102,7 +102,7 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq},
             throw(ArgumentError("You have to specify at least a protein change for ExomeSeq data."))
         end
 
-		# if !(haskey(entry,"reference_mismatch_avg") && haskey(entry,"variant_mismatch_avg") 
+		# if !(haskey(entry,"reference_mismatch_avg") && haskey(entry,"variant_mismatch_avg")
 		# 		&& haskey(entry,"reference_mismatch_sum") && haskey(entry, "variant_mismatch_sum")
 		# 		&& haskey(entry, "reference_dist3effective_avg") && haskey(entry, "variant_dist3effective_avg"))
 		# 	throw(ArgumentError("For ExomeSeq data, you have to specify at least values for reference_mismatch_avg, variant_mismatch_avg,
@@ -131,11 +131,8 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq},
 		tumor_variant_count = get(entry, "tumor_variant_count", 0.)
 		details = get(entry, "details", "")
 
-        # @info "current settings" protein_change reference_mismatch_avg reference_mismatch_sum reference_dist3effective_avg variant_mismatch_avg variant_mismatch_sum variant_dist3effective_avg num_cosmic is_cancer_gene variant_effect nucleotid_change variant_confidence norm_zygosity norm_reference_count norm_variant_count tumor_zygosity tumor_reference_count tumor_variant_count details
-        # @info "current types" typeof(protein_change) typeof(reference_mismatch_avg) typeof(reference_mismatch_sum) typeof(reference_dist3effective_avg) typeof(variant_mismatch_avg) typeof(variant_mismatch_sum) typeof(variant_dist3effective_avg) typeof(num_cosmic) typeof(is_cancer_gene) typeof(variant_effect) typeof(nucleotid_change) typeof(variant_confidence) typeof(norm_zygosity) typeof(norm_reference_count) typeof(norm_variant_count) typeof(tumor_zygosity) typeof(tumor_reference_count) typeof(tumor_variant_count) typeof(details)
-
-		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg, 
-                                reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum, 
+		exome_data = ExomeSeq(protein_change, reference_mismatch_sum=reference_mismatch_sum, reference_mismatch_avg=reference_mismatch_avg,
+                                reference_dist3effective_avg=reference_dist3effective_avg, variant_mismatch_sum=variant_mismatch_sum,
                                 variant_mismatch_avg=variant_mismatch_avg, variant_dist3effective_avg=variant_dist3effective_avg,
 								num_cosmic=num_cosmic, variant_effect=variant_effect,
 								nucleotid_change=nucleotid_change, variant_confidence=variant_confidence,

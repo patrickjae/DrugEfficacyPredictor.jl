@@ -7,7 +7,7 @@ end
 function to_json(data::Experiment)
     response = Dict{String, Any}()
     response["results"] = to_json(collect(values(data.results)))
-    response["test_results"] = to_json(collect(values(data.test_results)))
+    # response["test_results"] = to_json(collect(values(data.test_results)))
     response["cell_lines"] = to_json(collect(values(data.cell_lines)))
     response["drugs"] = to_json(collect(values(data.drugs)))
     response["genes"] = to_json(union(collect(values(experiment.genes)), collect(values(experiment.genes_by_hgnc)), collect(values(experiment.genes_by_ensembl))))
@@ -26,12 +26,12 @@ function to_json(data::Vector{Any})
 end
 
 #aliases
-cell_lines_to_json(data::Experiment) = to_json(collect(values(data.cell_lines)))
-drugs_to_json(data::Experiment) = to_json(collect(values(data.drugs)))
-genes_to_json(data::Experiment) = to_json(union(collect(values(experiment.genes)), collect(values(experiment.genes_by_hgnc)), collect(values(experiment.genes_by_ensembl))))
-proteins_to_json(data::Experiment) = to_json(data.proteins)
-pathways_to_json(data::Experiment) = to_json(data.pathway_information)
-
+get_cell_lines(data::Experiment) = to_json(collect(values(data.cell_lines)))
+get_drugs(data::Experiment) = to_json(collect(values(data.drugs)))
+get_genes(data::Experiment) = to_json(union(collect(values(experiment.genes)), collect(values(experiment.genes_by_hgnc)), collect(values(experiment.genes_by_ensembl))))
+get_proteins(data::Experiment) = to_json(data.proteins)
+get_pathways(data::Experiment) = to_json(collect(values(data.pathway_information)))
+get_outcomes(data::Experiment) = to_json(collect(values(data.results)))
 
 function to_json(data::CellLine) 
     response = Dict{String, Any}()
