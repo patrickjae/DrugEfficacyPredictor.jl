@@ -86,10 +86,8 @@ end
 
 
 function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction; inference_config::InferenceConfiguration = InferenceConfiguration(), model_config::ModelConfiguration)
-	log_message("creating prediction model")
 	model = DrugEfficacyPredictor.PredictionModel(dep.T, dep.K, dep.N, model_config = model_config)
 	all_tasks = collect(keys(dep.experiment.results))
-	log_message("computing kernel products")
 	kernel_products = Dict{DrugEfficacyPredictor.Drug, Matrix{Float64}}()
 	for (t, d) in enumerate(all_tasks)
 		views = dep.kernels[d]
@@ -109,7 +107,6 @@ function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction; 
 	errs = Float64[]
 	test_errs = Float64[]
 	# while err_convergence > convergence_criterion || iter < min_iter
-	log_message("starting inference loop")
 	while convergence > inference_config.convergence_criterion || iter < inference_config.min_iter
 		ll, err = parameter_inference_step(dep, model, kernel_products, all_tasks)
 		convergence = (old_ll - ll)/old_ll

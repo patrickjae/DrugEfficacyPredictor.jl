@@ -144,7 +144,6 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
     K = 0
     # compute a base kernel for each view, containing all cell lines that are present in all views
     num_views = length(experiment.views)
-    log_message("computing base kernels")
     for v in experiment.views
         # get views of this type for all cell lines
         # v = experiment.views[v_id]
@@ -154,10 +153,14 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
         end
         # compute the base kernel for this view
         kct = @elapsed base_kernels[v] = compute_kernel(data_views...)
-        log_message("computing base kernel for $v $kct seconds)")
+        if cell_lines_test != nothing
+            log_message("computing base kernel for $v $kct seconds)")
+        end
         K += 1
         if length(experiment.pathway_information) != 0
-            log_message("computing pathway specific kernels...")
+            if cell_lines_test != nothing
+                log_message("computing pathway specific kernels...")
+            end
             pathway_specific_kernels[v] = Vector{Matrix{Float64}}()
 
             # # pathway specific kernels method 1: compute a kernel for each pathway
@@ -202,12 +205,18 @@ function compute_all_kernels(experiment::Experiment, cell_lines::Vector{CellLine
                 end
             # # method 2 end
             end
-            log_message("computing pathway specific kernels for $v took $tt seconds)")
+            if cell_lines_test != nothing
+                log_message("computing pathway specific kernels for $v took $tt seconds)")
+            end
         else
-            log_message("Note: no pathway information provided")
+            if cell_lines_test != nothing
+                log_message("Note: no pathway information provided")
+            end
         end
     end
-    log_message("done computing kernels")
+    if cell_lines_test != nothing
+        log_message("done computing kernels")
+    end
     (K, base_kernels, pathway_specific_kernels)
 end
 

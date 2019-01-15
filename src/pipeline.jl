@@ -9,14 +9,12 @@ function train(experiment::Experiment, data::Dict{String, Any})
         # extract inference config
         inference_config = read_inference_configuration(data)
         log_progress(experiment, "read inference configuration")
-        log_message("read inference config")
         model_config = nothing
         # if do_gridsearch is false, extract the model config
         if !inference_config.do_gridsearch
             model_config = read_model_configuration(data)
         end
         log_progress(experiment, "read model configuration")
-        log_message("read model config")
         # run the model
         # TODO: extract whether to subsume pathway information and do variance filtering
         dep = create_drug_efficacy_predictor(experiment, inference_config)
@@ -97,7 +95,6 @@ function run_cross_validation(dep::DrugEfficacyPrediction; num_folds::Int64 = 10
             end
         end
         inference_config.fold_num = i
-        log_message("calling run_model")
         run_model(dep, inference_config = inference_config, model_config = model_config)
     end
 end
@@ -132,10 +129,8 @@ end
 
 function run_model(dep; inference_config::InferenceConfiguration = InferenceConfiguration(), model_config::Union{Nothing, ModelConfiguration} = nothing)
     # things to do only once (or once per fold)
-    log_message("in run model")
     # compute kernels and cross kernels depending on which cell lines are in the training and test set
     set_training_test_kernels(dep)
-    log_message("set training test kernels")
     # result dir is the target directory amended by the fold
     result_dir = inference_config.do_cross_validation ? joinpath(inference_config.target_dir, string(inference_config.fold_num)) : inference_config.target_dir
     mkpath(result_dir)
@@ -175,7 +170,6 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
 
         wpc_script_gs_cmd = `perl $script_name $sd_file $test_response_file $zscore_file $gold_standard_file $wpc_target_file $wpc_summary_file`
     end
-    log_message("generating model configs")
     all_model_configs = ModelConfiguration[]
     # if doing gridsearch, create model configs to use
     if inference_config.do_gridsearch
@@ -201,53 +195,51 @@ function run_model(dep; inference_config::InferenceConfiguration = InferenceConf
     # ranks = Vector{Dict{Drug, Vector{Int64}}}(undef, length(all_model_configs))
     # models = Vector{PredictionModel}(undef, length(all_model_configs))
     # do the actual inference sweep
-    log_message("running model configurations")
     Threads.@threads for i in 1:length(all_model_configs)
-        try
-            mc = all_model_configs[i]
-            # TODO: this assumes we are using the same values for all params, maybe change later
-            # same for the generic filenam below
-            alpha = mc.⍺_ɣ
-            beta = mc.β_ɣ
-            mu = mc.μ_e
-            v = mc.𝜎_e
+        mc = all_model_configs[i]
+        # TODO: this assumes we are using the same values for all params, maybe change later
+        # same for the generic filenam below
+        alpha = mc.⍺_ɣ
+        beta = mc.β_ɣ
+        mu = mc.μ_e
+        v = mc.𝜎_e
 
-            log_message("parameter setting: alpha=$alpha, beta=$beta mu=$mu var=$v")
-            # TODO: run each model multiple times (e.g. 10) and collect prediction results
-            # report mean and variance of those predictions
-            log_message("calling parameter_inference method")
-            (lls, errs, test_errs, model, convergence) = parameter_inference(dep, inference_config = inference_config, model_config = mc)
-            log_message("inference stats: likelihood=$(lls[end]) train_error=$(errs[end]) test_error=$(test_errs[end]) convergence=$convergence")
-            # models[i] = model
-            error_string = inference_config.do_cross_validation ?
-                "$alpha\t$beta\t$mu\t$v\t$(inference_config.fold_num)\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n" :
-                "$alpha\t$beta\t$mu\t$v\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n"
-            all_errors[i] = error_string
+        log_message("parameter setting $i (of $(length(all_model_configs))): alpha=$alpha, beta=$beta mu=$mu var=$v")
+        # TODO: run each model multiple times (e.g. 10) and collect prediction results
+        # report mean and variance of those predictions
+        # log_message("calling parameter_inference method")
+        (lls, errs, test_errs, model, convergence) = parameter_inference(dep, inference_config = inference_config, model_config = mc)
+        log_message("inference stats: likelihood=$(lls[end]) train_error=$(errs[end]) test_error=$(test_errs[end]) convergence=$convergence")
+        # models[i] = model
+        error_string = inference_config.do_cross_validation ?
+            "$alpha\t$beta\t$mu\t$v\t$(inference_config.fold_num)\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n" :
+            "$alpha\t$beta\t$mu\t$v\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n"
+        all_errors[i] = error_string
 
-            (p, r) = predict_outcomes(dep, model, collect(values(dep.experiment.cell_lines)))
-            # predictions[i] = p
-            # ranks[i] = r
+        (p, r) = predict_outcomes(dep, model, collect(values(dep.experiment.cell_lines)))
+        # predictions[i] = p
+        # ranks[i] = r
 
 
-            generic_filename =  "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt"
-            # writing result files
-            log_message("writing results")
-            write_results(dep, result_dir, generic_filename, p, r, model)
+        generic_filename =  "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt"
+        # writing result files
+        write_results(dep, result_dir, generic_filename, p, r, model)
 
-            resulting_ranking = joinpath(result_dir, "ranking", generic_filename)
+        resulting_ranking = joinpath(result_dir, "ranking", generic_filename)
 
-            if inference_config.compute_wpc_index
-                wpc_script_cmd = `perl $script_name $sd_file $test_response_file $zscore_file $resulting_ranking $wpc_target_file $wpc_summary_file`
-                run(wpc_script_cmd)
-            end
-
-            log_message("done predicting")
-        catch ex
-            st = map(string, stacktrace(catch_backtrace()))
-            log_message("caught exception: $ex")
-            log_message("stacktrace")
-            [log_message(ste) for ste in st]
+        if inference_config.compute_wpc_index
+            wpc_script_cmd = `perl $script_name $sd_file $test_response_file $zscore_file $resulting_ranking $wpc_target_file $wpc_summary_file`
+            run(wpc_script_cmd)
         end
+
+        p = nothing
+        r = nothing
+        model = nothing
+        lls = nothing
+        errs = nothing
+        test_errs = nothing
+
+        Base.GC.gc(true)
     end
 
     # for i in 1:length(all_model_configs)
