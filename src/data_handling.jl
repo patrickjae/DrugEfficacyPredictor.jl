@@ -9,7 +9,7 @@ create_experiment() = Experiment()
 get_cell_line!(experiment::Experiment, cell_line_id::String, cancer_type::String; in_test_set::Bool=false) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type, in_test_set = in_test_set))
 get_cell_line(experiment::Experiment, cell_line_id::String) = experiment.cell_lines[cell_line_id]
 
-function get_cell_line(experiment::Experiment, data::Dict{String, Any})
+function get_cell_line(experiment::Experiment, data::Dict{String, Any}; for_prediction::Bool = false)
 	if !haskey(data, "id") || !haskey(data, "cancer_type")
 		throw(ArgumentError("You need to provide a cell line id and the cancer type."))
 	end
@@ -17,13 +17,17 @@ function get_cell_line(experiment::Experiment, data::Dict{String, Any})
 	if haskey(data, "in_test_set")
 		in_test_set = true
 	end
+	# when creating cell line objects for prediction, do not add to the experiment data
+	if for_prediction
+		return CellLine(data["id"], data["cancer_type"], false)
+	end
 	get_cell_line!(experiment, data["id"], data["cancer_type"], in_test_set = in_test_set)
 end
 
 remove_cell_line!(experiment::Experiment, cell_line_id::String) = if haskey(experiment.cell_lines, cell_line_id) delete!(experiment.cell_lines, cell_line_id) end
 
 ######### GENES ###########
-function add_gene(experiment::Experiment, gene::Gene) 
+function add_gene(experiment::Experiment, gene::Gene)
 	experiment.genes[gene.entrez_id] = gene
 	experiment.genes_by_hgnc[gene.hgnc_id] = gene
 	experiment.genes_by_ensembl[gene.ensembl_id] = gene
@@ -51,7 +55,6 @@ function add_gene(experiment::Experiment, data::Dict{String, Any})
 	gene_id = data["gene_id"]
 	id_type = get(data, "type_id", "entrez_id")
 	is_cancer_gene = get(data, "is_cancer_gene", false)
-	# @info gene_id id_type is_cancer_gene
 	add_gene(experiment, gene_id, id_type, is_cancer_gene = is_cancer_gene)
 end
 
@@ -61,19 +64,19 @@ end
 
 function add_gene_id!(experiment::Experiment, gene::Gene, id::String, id_type::String)
 	if id_type == "hgnc_id"
-		if (gene.hgnc_id != "") && (gene.hgnc_id != id) 
-			@warn "overwriting HGNC_ID" new_value=id old_value=gene.hgnc_id
+		if (gene.hgnc_id != "") && (gene.hgnc_id != id)
+			log_message("overwriting HGNC_ID, new_value=$id old_value=$(gene.hgnc_id)")
 		end
 		gene.hgnc_id = id
 		experiment.genes_by_hgnc[id] = gene
 	elseif id_type == "ensembl_id"
-		if (gene.ensembl_id != "") && (gene.ensembl_id != id) 
-			@warn "overwriting Ensembl ID" new_value=id old_value=gene.ensembl_id other_ids=[gene.hgnc_id, gene.entrez_id]
+		if (gene.ensembl_id != "") && (gene.ensembl_id != id)
+			log_message("overwriting Ensembl ID, new_value=$id old_value=$(gene.ensembl_id) other_ids=$([gene.hgnc_id, gene.entrez_id])")
 		end
 		gene.ensembl_id = id
 		experiment.genes_by_ensembl[id] = gene
 	else
-		@warn "unknown gene id type $id_type, ignoring"
+		log_message("unknown gene id type $id_type, ignoring")
 	end
 end
 
@@ -94,10 +97,27 @@ end
 
 get_gene(experiment::Experiment, gene_id::Int64, id_type::String="entrez_id") = experiment.genes[gene_id]
 
+function get_gene(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "gene_id")
+		throw(ArgumentError("You need to provide a gene id."))
+	end
+	if data["gene_id"] == nothing
+		throw(ArgumentError("The provided gene id is null."))
+	end
+	gene_id = data["gene_id"]
+	id_type = get(data, "type_id", "entrez_id")
+	try
+		return get_gene(experiment, gene_id, id_type)
+	catch
+		#not found
+		return nothing
+	end
+end
+
 ######### PATHWAYS ###########
 function add_pathway(experiment::Experiment, genes::Vector{K}=Vector{Gene}(); id::String="", name::String="") where K<:KeyType
 	pw = Pathway{K}(genes, name = name, id = id)
-	push!(experiment.pathway_information, pw)
+	experiment.pathway_information[id] = pw
 	pw
 end
 
@@ -118,7 +138,7 @@ function add_pathway(experiment::Experiment, data::Dict{String, Any})
 			catch KeyError end
 		end
 		if !found
-			@warn "no data for gene" gene=g pathway=data["name"] pathway_id=data["id"]
+			log_message("no data for gene, gene=$g pathway=$(data["name"]) pathway_id=$(data["id"])")
 		end
 	end
 	add_pathway(experiment, collect(genes), name = string(data["name"]), id = string(data["id"]))
@@ -127,6 +147,13 @@ end
 function add_gene_to_pathway(pw::Pathway{K}, gene::K) where {K<:KeyType}
 	push!(pw.genes, gene)
 	pw
+end
+
+function get_pathway(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "id") throw(ArgumentError("No pathway id provided.")) end
+	pw_id = data["id"]
+	if !haskey(experiment.pathway_information, pw_id) return nothing end
+	experiment.pathway_information[pw_id]
 end
 ######### PROTEINS ###########
 function add_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false)
@@ -146,6 +173,12 @@ function add_protein(experiment::Experiment, data::Dict{String, Any})
 	get_protein(experiment, hgnc_id, fully_validated=ab_validated)
 end
 
+function get_protein(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "hgnc_id") throw(ArgumentError("No protein HGNC ID provided.")) end
+	protein_id = data["hgnc_id"]
+	if !haskey(experiment.proteins, protein_id) return nothing end
+	experiment.proteins[protein_id]
+end
 ######### VIEWS ###########
 add_view!(experiment::Experiment, dv::Type{<:ViewType}) = push!(experiment.views, dv)
 
@@ -163,11 +196,11 @@ function add_measurement(d::DataView{<:KeyType,<:ViewType}, subject::KeyType, me
 		push!(d.used_keys, subject)
 		return d
 	end
-	@warn "measurement already exists for $subject, ignoring..."
-	@warn "if you want to force the new value, use add_measurement! instead"
+	log_message("measurement already exists for $subject, ignoring...")
+	log_message("if you want to force the new value, use add_measurement! instead")
 	d
 end
-	
+
 function add_measurement!(d::DataView{<:KeyType, <:VectorViewType}, subject::KeyType, measurement::VectorViewType)
 	push!(d.used_keys, subject)
 	insert!(d.measurements, subject, measurement)
@@ -228,6 +261,12 @@ function add_drug(e::Experiment, data::Dict{String, Any})
 	add_drug(e, data["id"], affected_genes = affected_genes, chemical_structure = chemical_structure)
 end
 
+function get_drug(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "id") throw(ArgumentError("No drug id provided")) end
+	drug_id = data["id"]
+	if !haskey(experiment.drugs, drug_id) return nothing end
+	experiment.drugs[drug_id]
+end
 ######### NORMALIZATION ###########
 
 function normalize_data_views(experiment::Experiment)
@@ -235,7 +274,7 @@ function normalize_data_views(experiment::Experiment)
 	for v in experiment.views
 		# Boolean vals need not be normalized
 		if v == RNASeqCall continue end
-		@info "normalizing view $v"
+		log_message("normalizing view $v")
 		# reset the normalization statistics for this view
 		experiment.statistics[v] = OrderedDict{KeyType, Tuple{Float64, Float64}}()
 		# clean used keys for cell lines and
@@ -261,15 +300,13 @@ function normalize_data_views(experiment::Experiment)
 					end
 				end
 			end
-			# @info all_values
 			mean_val = mean(all_values)
 			std_val = stdm(all_values, mean_val)
 			if std_val == 0. || isnan(std_val)
 				# @warn "standard deviation is zero in view $v for key $key"
 				std_val = 1e-7
 			end
-			# @info "computed values" mean=mean_val std=std_val
-			#iterate over values again and normalize 
+			#iterate over values again and normalize
 			for cl in values(experiment.cell_lines)
 				if haskey(cl.views,v)
 					if key ∈ cl.views[v].used_keys
@@ -288,7 +325,7 @@ end
 function filter_data_views(experiment::Experiment; proportion_kept = .1)
 	for v in experiment.views
 		if v == RNASeqCall continue end
-		@info "filtering view $v"
+		log_message("filtering view $v")
 		stats = experiment.statistics[v]
 		last_idx = 	Int64(ceil(length(stats) * proportion_kept))
 		sorted_idx = sortperm(map(val -> val[2], values(stats)), rev=true)
@@ -346,18 +383,20 @@ end
 
 function add_outcome(e::Experiment, d::Drug, data::Dict{String, Any}; outcome_type::String="IC50")
 	o = Outcome(d.id, outcome_type)
-	# @info "created outcome object for drug $(d.id)"
 	for (cell_line_id, outcome_value) in data
-		# @info "processing cell line outcome" cell_line_id outcome_value
 		if outcome_value == "NA"
-			# @info "$cell_line_id has NA value, skipping"
 			# skip NA values
 			continue
 		end
 		cl_obj = get_cell_line(e, cell_line_id)
-		# @info "got cell line object"
 		add_result!(o, cl_obj, outcome_value)
 	end
 	add_outcome(e, d, o)
 	e
+end
+
+function get_outcome(experiment::Experiment, data::Dict{String, Any})
+	if !haskey(data, "drug_id") throw(ArgumentError("No drug id specified.")) end
+	if !haskey(experiment.results, experiment.drugs[data["drug_id"]]) return nothing end
+	experiment.results[experiment.drugs[data["drug_id"]]]
 end
