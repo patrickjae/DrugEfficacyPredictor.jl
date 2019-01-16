@@ -213,8 +213,8 @@ If you want to use your own data, you can do so by uploading to the server:
     - example data can be loaded via command line with ```load_iorio_data()``` (experiment id "iorio") or ```load_dream_challenge_data()``` (experiment id "dream_challenge")
 3) start the training process: ```curl -X POST http://{host}:{port}/experiments/{experiment id}/train -d @{path to config file}```, an example config file is provided in the ```data/configs``` directory
 4) query the server for training progress (optionally)
-5) download the training result directory as zip file (once the training is finished): ```curl -X GET http://{host}:{port}/experiments/{experiment id}/results```
-6) predict response data for arbitrary additional cell lines (if applicable):
+5) download the training result directory as tar file (once the training is finished): ```curl -X GET http://{host}:{port}/experiments/{experiment id}/results```
+6) predict response data for arbitrary additional cell lines (if applicable): ```curl -X GET http://{host}:{port}/experiments/{experiment id}/results -d @{path to file with cell line data}```
 
 ## References
 [1] Costello, J. C., Heiser, L. M., Georgii, E., & Gönen, M. (2014). A community effort to assess and improve drug sensitivity prediction algorithms. Nature.
