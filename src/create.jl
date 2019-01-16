@@ -186,9 +186,21 @@ function populate_data_view!(experiment::Experiment, d::DataView{Gene, RNASeq}, 
 		gene = add_gene(experiment, entry)
 
 		expression_value = entry["expression_value"]
-		expression_status = entry["expression_status"]
 
 		add_measurement!(d, gene, RNASeq(expression_value, expression_status))
+	end
+end
+
+"""
+Populate a data view with RNASeqCall data from JSON.
+"""
+function populate_data_view!(experiment::Experiment, d::DataView{Gene, RNASeqCall}, data::Vector{Any})
+	for entry in data
+		gene = add_gene(experiment, entry)
+
+		expression_status = entry["expression_status"]
+
+		add_measurement!(d, gene, RNASeqCall(expression_value, expression_status))
 	end
 end
 
