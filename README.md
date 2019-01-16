@@ -2,11 +2,12 @@
 
 ## Uploading Data
 We provide two initial data sets that can be used:
+
     - "dream_challenge": the data set used for the drug efficacy prediction DREAM challenge on which the algorithm is based and which is reported in [1]
     - "iorio": data on a much larger panel of cell lines and drugs as reported in [2]
 
 If you want to use your own data, you can do so by uploading to the server:
-1) create an experiment: ```curl -X POST http://{host}:{port}/experiments -d '{"experiment_id" : "your_experiment"}'
+1) create an experiment: ```curl -X POST http://{host}:{port}/experiments -d '{"experiment_id" : "your_experiment"}'```
     - then data part is optional; if omitted, a random experiment_id is created, same is tue when the id is already in use
 2) upload your data: ```curl -X POST http://{host}:{port}/experiments/{experiment_id}/data/{data_type} -d @{path to dat in json}```
     - data_type can be one of the following: genes, proteins, cell_lines, drugs, pathways, outcomes
