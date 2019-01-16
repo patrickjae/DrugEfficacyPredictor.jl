@@ -16,10 +16,8 @@ function train(experiment::Experiment, data::Dict{String, Any})
         end
         log_progress(experiment, "read model configuration")
         # run the model
-        # TODO: extract whether to subsume pathway information and do variance filtering
         dep = create_drug_efficacy_predictor(experiment, inference_config)
-        temp_dir = mktempdir()
-        inference_config.target_dir = temp_dir
+        inference_config.target_dir = mktempdir()
 
         log_progress(experiment, "running model computations")
         if inference_config.do_cross_validation
@@ -28,13 +26,16 @@ function train(experiment::Experiment, data::Dict{String, Any})
             run_model(dep, inference_config = inference_config, model_config = model_config)
         end
         log_progress(experiment, "preparing results for download")
-        # compile the results and store model for prediction
-        zip_target = inference_config.target_dir
-        if endswith(inference_config.target_dir, "/") zip_target = chop(zip_target) end
-        zip_results_cmd = `zip -r $(zip_target) $(joinpath(inference_config.target_dir, "*"))`
-        run(zip_results_cmd)
+        # compile the results
+        tar_dir = mktempdir()
+        tar_file = joinpath(tar_dir, "results.tgz")
+        log_message("archiving results at $tar_file")
+        tar_results_cmd = `tar czf $(tar_file) $(inference_config.target_dir)`
+        run(tar_results_cmd)
         log_progress(experiment, "finished, results ready for download")
-        result_file_dictionary[experiment.internal_id] = zip_target
+        # remove the output files
+        rm(inference_config.target_dir, force = true, recursive = true)
+        result_file_dictionary[experiment.internal_id] = tar_file
     # catch ex
     #     st = map(string, stacktrace(catch_backtrace()))
     #     # log_progress(experiment, "exception has occurred: $(typeof(ex))")
@@ -271,13 +272,16 @@ function set_training_test_kernels(dep::DrugEfficacyPrediction)
     end
 
     all_drugs = collect(keys(dep.experiment.results)) # the tasks
-    cell_lines = collect(values(dep.experiment.cell_lines))
+    cell_lines = collect(values(dep.experiment.cell_lines)) # all cell lines in the experiment, excluding held-out data
 
-    # compute drug specific kernels
+    # the kernels between cell lines
     kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    # the target values
     targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
+    # cross kernels between training data and test data
     cross_kernels = DataStructures.OrderedDict{Drug, Vector{Matrix{Float64}}}()
+    # target values for test data
     test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
 
