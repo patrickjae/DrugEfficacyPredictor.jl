@@ -43,39 +43,40 @@ function test(dep::DrugEfficacyPrediction, m::PredictionModel)
 end
 
 
-function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel,
-            cell_lines::Vector{CellLine})
+function predict_outcomes(dep::DrugEfficacyPrediction, m::PredictionModel, cell_lines::Vector{CellLine}; held_out::Bool = false)
     predictions = Dict{Drug, Vector{Float64}}()
     ranks = Dict{Drug, Vector{Int64}}()
     # all cell lines present for training
-    all_cell_lines = filter(cl -> !cl.in_test_set, collect(values(dep.experiment.cell_lines)))
-
-    (num_cross_kernels, base_cross_kernels, pw_specific_cross_kernels) = compute_all_kernels(dep.experiment, all_cell_lines, cell_lines, subsume_pathways = dep.subsume_pathways)
+    all_cell_lines = collect(values(dep.experiment.cell_lines))
+    # only compute the kernels when dealing with held-out data
+    num_cross_kernels = dep.K
+    base_cross_kernels = dep.base_kernels
+    pw_specific_cross_kernels = dep.pathway_specific_kernels
+    if held_out
+        (num_cross_kernels, base_cross_kernels, pw_specific_cross_kernels) = compute_all_kernels(dep.experiment, all_cell_lines, cell_lines, subsume_pathways = dep.subsume_pathways)
+    end
     # do predictions for all drugs we saw at training time
     for (t, drug) in enumerate(keys(dep.experiment.results))
-        # find cell lines that have outcome for this drug
-        training_cell_lines = filter(cl -> haskey(dep.experiment.results[drug].outcome_values, cl), all_cell_lines)
+        # find cell lines that have outcome for this drug and are in the training set
+        training_cell_lines = filter(cl -> !cl.in_test_set && haskey(dep.experiment.results[drug].outcome_values, cl), all_cell_lines)
         training_set_cell_line_idx = findall((in)(training_cell_lines), all_cell_lines)
         # find the ids of these cell_lines
-        # training_set_cell_line_idx = findall((in)(training_cell_lines), all_cell_lines)
-        # predict_cell_line_idx = findall((in)(cell_lines), all_cell_lines)
+        predict_cell_line_idx = collect(1:length(cell_lines))
+        if !held_out
+            # these cell lines should be included in the experiment, determine their position
+            predict_cell_line_idx = findall((in)(cell_lines), all_cell_lines)
+        end
 
         # compute similarity with all other cell lines in the training set
         kernels = Vector{Matrix{Float64}}()
 
         for v in dep.experiment.views
-            # dataviews_from_training = map(cl -> cl.views[v], collect(keys(dep.experiment.results[drug].outcome_values)))
-            # k = dep.base_kernels[v][training_set_cell_line_idx,predict_cell_line_idx]
-            push!(kernels, base_cross_kernels[v][training_set_cell_line_idx, :])
+            push!(kernels, base_cross_kernels[v][training_set_cell_line_idx, predict_cell_line_idx])
             if length(dep.experiment.pathway_information) != 0
                 for pw_kernel in pw_specific_cross_kernels[v]
-                    push!(kernels, pw_kernel[training_set_cell_line_idx, :])
+                    push!(kernels, pw_kernel[training_set_cell_line_idx, predict_cell_line_idx])
                 end
-                # for pw_kernel in dep.pathway_specific_kernels[v]
-                #     push!(kernels, pw_kernel[training_set_cell_line_idx,predict_cell_line_idx])
-                # end
             end
-            # @info "computed kernels for view $v, size of kernel: $(size(k))"
         end
 
         gene_expression = base_cross_kernels[GeneExpression][training_set_cell_line_idx, :]
