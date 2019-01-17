@@ -231,4 +231,4 @@ If you want to use your own data, you can do so by uploading to the server:
     + combine result data and create different splits of the data (ok)
     + write splits to filesystem (ok)
     + run external wpc scripts on newly created data splits (ok, dream challenge only)
-    + best results so far, when \[.1 \le E[\nu] \le 10\] for \[\nu \sim \mathcal G(\cdot,\cdot)\] a Gamma-distributed RV
+    + best results so far, when $`.1 \le E[\nu] \le 10`$ for $`\nu \sim \mathcal G(\cdot,\cdot)`$ a Gamma-distributed RV
