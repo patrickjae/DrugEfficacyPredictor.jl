@@ -59,7 +59,7 @@ function train_request(req::HTTP.Request)
     experiment = experiments_dictionary[experiment_id]
     log_message("starting train method")
 
-    @async train(experiment, request_dictionary)
+    @spawn train(experiment, request_dictionary)
 
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Training in progress, check via /experiments/$experiment_id/progress. Once results are ready for download, access them via /experiments/$experiment_id/results.")))
