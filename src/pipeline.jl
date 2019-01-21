@@ -32,10 +32,10 @@ function train(experiment::Experiment, data::Dict{String, Any})
         log_message("archiving results at $tar_file")
         tar_results_cmd = `tar czf $(tar_file) $(inference_config.target_dir)`
         run(tar_results_cmd)
-        log_progress(experiment, "finished, results ready for download")
         # remove the output files
         rm(inference_config.target_dir, force = true, recursive = true)
         result_file_dictionary[experiment.internal_id] = tar_file
+        log_progress(experiment, "finished, results ready for download")
     # catch ex
     #     st = map(string, stacktrace(catch_backtrace()))
     #     # log_progress(experiment, "exception has occurred: $(typeof(ex))")

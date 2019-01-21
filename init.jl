@@ -13,6 +13,6 @@ const predictor_dictionary = Dict{String, DrugEfficacyPredictor.DrugEfficacyPred
 # create a training progress message channel
 const training_progress = Dict{String, Vector{String}}()
 
-const result_file_dictionary = Dict{String, Vector{String}}()
+const result_file_dictionary = Dict{String, String}()
 
 log_message(msg) = Core.println("Thread $(Threads.threadid()): $msg")
