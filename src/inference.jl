@@ -25,66 +25,6 @@ function data_likelihood(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, m::P
 	(ll, mse)
 end
 
-# function gridsearch(dep::DrugEfficacyPredictor.DrugEfficacyPrediction, dest_path::String="results")
-# 	# gamma_dist_alphas = [1e-10, 1e-5, .1, 1., 10., 1e5, 1e10]
-# 	# gamma_dist_betas = [1e-10, 1e-5, .1, 1., 10., 1e5, 1e10]
-# 	gamma_dist_alphas = [250., 500., 750., 1000.]
-# 	alpha_beta_ratios = [1., 5., 50., 100.]
-# 	# gamma_dist_betas = [1e-10, .1, 1., 1e10]
-# 	# gamma_dist_alphas = [1.]
-# 	# gamma_dist_betas = [1.]
-# 	# normal_means = [-1., 0., 1.]
-# 	normal_vars = [.1, .5, 1., 2., 10., 20.]
-# 	# gamma_dist_alphas = [1e-3]
-# 	# gamma_dist_betas = [1e-3]
-# 	normal_means = [1.]
-# 	# normal_vars = [2.]
-#
-# 	mkpath(dest_path)
-# 	log_message("created paths")
-# 	# Plots.plotlyjs()
-# 	all_configurations = Vector{Vector{Float64}}()
-# 	for alpha in gamma_dist_alphas, ratio in alpha_beta_ratios, v in normal_vars
-# 		push!(all_configurations, [alpha, alpha/ratio, 1., v])
-# 	end
-# 	log_message("created $(length(all_configurations)) parameter settings")
-#
-#     all_errors = String[]
-#
-#     inference_config = InferenceConfiguration()
-#     inference_config.convergence_criterion = 1e-4
-#     inference_config.max_iter = 200
-#     inference_config.target_dir = dest_path
-#
-#     set_training_test_kernels(dep)
-# 	log_message("starting inference")
-# 	for i in 1:length(all_configurations)
-# 		(alpha, beta, mu, v) = all_configurations[i]
-# 		log_message("parameter setting $i, alpha=$alpha beta=$beta mu=$mu v=$v")
-# 		mc = ModelConfiguration(alpha, beta, mu, v)
-# 		mc.μ_b = 0.
-# 		mc.μ_e = 1.
-# 		try
-# 			(lls, errs, test_errs, model, convergence) = parameter_inference(dep, inference_config = inference_config, model_config = mc)
-# 			log_message("inference stats: likelihood=$(lls[end]), train_error=$(errs[end]) test_error=$(test_errs[end]) convergence=$convergence")
-# 			push!(all_errors, "$alpha\tbeta\tmu\tv\t$(errs[end])\t$(test_errs[end])\t$(lls[end])\n")
-# 			(predictions, ranks) = predict_outcomes(dep, model, collect(values(dep.experiment.cell_lines)))
-# 			write_results(dep, inference_config.target_dir, "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt", predictions, model)
-# 		catch exc
-# 			display(stacktrace(catch_backtrace()))
-# 			log_message("Exception occurred, $exc alpha=$alpha mu=$mu variance=$v")
-# 			break
-# 		end
-# 	end
-#
-# 	f = open(joinpath(dest_path, "errors.txt"), "w")
-# 	for s in all_errors
-# 		@printf(f, "%s", s)
-# 	end
-# 	close(f)
-# end
-
-
 function parameter_inference(dep::DrugEfficacyPredictor.DrugEfficacyPrediction; inference_config::InferenceConfiguration = InferenceConfiguration(), model_config::ModelConfiguration)
 	model = DrugEfficacyPredictor.PredictionModel(dep.T, dep.K, dep.N, model_config = model_config)
 	all_tasks = collect(keys(dep.experiment.results))
