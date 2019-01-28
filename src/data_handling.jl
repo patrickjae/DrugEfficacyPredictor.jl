@@ -1,15 +1,20 @@
 ######### EXPERIMENT ###########
 
 # create the overall data set
-create_experiment() = Experiment()
+function create_experiment(id::String = string(UUIDs.uuid4()))
+	experiments_dictionary[id] = Experiment(id)
+	training_progress[id] = Vector{String}()
+	experiments_dictionary[id]
+end
 
+get_experiment(id::String) = experiments_dictionary[id]
 
 ######### CELL LINES ###########
 # get a cell line object for an experiment or creates a new one
 get_cell_line!(experiment::Experiment, cell_line_id::String, cancer_type::String; in_test_set::Bool=false) = get!(experiment.cell_lines, cell_line_id, CellLine(cell_line_id, cancer_type, in_test_set = in_test_set))
 get_cell_line(experiment::Experiment, cell_line_id::String) = experiment.cell_lines[cell_line_id]
 
-function get_cell_line(experiment::Experiment, data::Dict{String, Any}; for_prediction::Bool = false)
+function get_cell_line(experiment_id::String, data::Dict{String, Any}; for_prediction::Bool = false)
 	if !haskey(data, "id") || !haskey(data, "cancer_type")
 		throw(ArgumentError("You need to provide a cell line id and the cancer type."))
 	end
@@ -21,6 +26,7 @@ function get_cell_line(experiment::Experiment, data::Dict{String, Any}; for_pred
 	if for_prediction
 		return CellLine(data["id"], data["cancer_type"], false)
 	end
+	experiment = get_experiment(experiment_id)
 	get_cell_line!(experiment, data["id"], data["cancer_type"], in_test_set = in_test_set)
 end
 
@@ -45,7 +51,8 @@ function add_gene(experiment::Experiment, gene_id::Union{Int64, String}, id_type
 	end
 end
 
-function add_gene(experiment::Experiment, data::Dict{String, Any})
+function add_gene(experiment_id::String, data::Dict{String, Any})
+	experiment = get_experiment(experiment_id)
 	if !haskey(data, "gene_id")
 		throw(ArgumentError("You need to provide a gene id."))
 	end
@@ -97,7 +104,8 @@ end
 
 get_gene(experiment::Experiment, gene_id::Int64, id_type::String="entrez_id") = experiment.genes[gene_id]
 
-function get_gene(experiment::Experiment, data::Dict{String, Any})
+function get_gene(experiment_id::String, data::Dict{String, Any})
+	experiment = get_experiment(experiment_id)
 	if !haskey(data, "gene_id")
 		throw(ArgumentError("You need to provide a gene id."))
 	end
@@ -121,10 +129,12 @@ function add_pathway(experiment::Experiment, genes::Vector{K}=Vector{Gene}(); id
 	pw
 end
 
-function add_pathway(experiment::Experiment, data::Dict{String, Any})
+function add_pathway(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "id") throw(ArgumentError("No ID provided for current pathway")) end
 	if !haskey(data, "name") throw(ArgumentError("No name provided for cubrrent pathway")) end
 	if !haskey(data, "genes") throw(ArgumentError("You need to specify a list of genes represented by type_id-id pairs.")) end
+
+	experiment = get_experiment(experiment_id)
 
 	genes = Set{Gene}()
 	for g in data["genes"]
@@ -149,9 +159,10 @@ function add_gene_to_pathway(pw::Pathway{K}, gene::K) where {K<:KeyType}
 	pw
 end
 
-function get_pathway(experiment::Experiment, data::Dict{String, Any})
+function get_pathway(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "id") throw(ArgumentError("No pathway id provided.")) end
 	pw_id = data["id"]
+	experiment = get_experiment(experiment_id)
 	if !haskey(experiment.pathway_information, pw_id) return nothing end
 	experiment.pathway_information[pw_id]
 end
@@ -164,18 +175,20 @@ end
 
 get_protein(experiment::Experiment, hgnc_id::String; fully_validated::Bool=false) = get!(experiment.proteins, hgnc_id, Protein(hgnc_id, fully_validated))
 
-function add_protein(experiment::Experiment, data::Dict{String, Any})
+function add_protein(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "hgnc_id")
 		throw(ArgumentError("You need to provide a protein HGNC_ID."))
 	end
 	protein_id = data["hgnc_id"]
 	ab_validated = get(entry, "antibody_validated", false)
+	experiment = get_experiment(experiment_id)
 	get_protein(experiment, hgnc_id, fully_validated=ab_validated)
 end
 
-function get_protein(experiment::Experiment, data::Dict{String, Any})
+function get_protein(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "hgnc_id") throw(ArgumentError("No protein HGNC ID provided.")) end
 	protein_id = data["hgnc_id"]
+	experiment = get_experiment(experiment_id)
 	if !haskey(experiment.proteins, protein_id) return nothing end
 	experiment.proteins[protein_id]
 end
@@ -244,26 +257,28 @@ function add_drug(e::Experiment, id::String; affected_genes::Vector{Gene}=Vector
 	d
 end
 
-function add_drug(e::Experiment, data::Dict{String, Any})
+function add_drug(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "id")
 		throw(ArgumentError("No drug id specified."))
 	end
 	affected_genes = Vector{Gene}()
 	chemical_structure = ""
+	experiment = get_experiment(experiment_id)
 	if haskey(data, "affected_genes")
 		for (id_type, gene_id) in data["affected_genes"]
-			push!(affected_genes, get_gene(e, gene_id, id_type))
+			push!(affected_genes, get_gene(experiment, gene_id, id_type))
 		end
 	end
 	if haskey(data, "chemical_structure")
 		chemical_structure = data["chemical_structure"]
 	end
-	add_drug(e, data["id"], affected_genes = affected_genes, chemical_structure = chemical_structure)
+	add_drug(experiment, data["id"], affected_genes = affected_genes, chemical_structure = chemical_structure)
 end
 
-function get_drug(experiment::Experiment, data::Dict{String, Any})
+function get_drug(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "id") throw(ArgumentError("No drug id provided")) end
 	drug_id = data["id"]
+	experiment = get_experiment(experiment_id)
 	if !haskey(experiment.drugs, drug_id) return nothing end
 	experiment.drugs[drug_id]
 end
@@ -381,7 +396,8 @@ function add_outcome(e::Experiment, d::Drug, o::Outcome)
 	e
 end
 
-function add_outcome(e::Experiment, d::Drug, data::Dict{String, Any}; outcome_type::String="IC50")
+function add_outcome(experiment_id::String, d::Drug, data::Dict{String, Any}; outcome_type::String="IC50")
+	e = get_experiment(experiment_id)
 	o = Outcome(d.id, outcome_type)
 	for (cell_line_id, outcome_value) in data
 		if outcome_value == "NA"
@@ -395,8 +411,9 @@ function add_outcome(e::Experiment, d::Drug, data::Dict{String, Any}; outcome_ty
 	e
 end
 
-function get_outcome(experiment::Experiment, data::Dict{String, Any})
+function get_outcome(experiment_id::String, data::Dict{String, Any})
 	if !haskey(data, "drug_id") throw(ArgumentError("No drug id specified.")) end
+	experiment = get_experiment(experiment_id)
 	if !haskey(experiment.results, experiment.drugs[data["drug_id"]]) return nothing end
 	experiment.results[experiment.drugs[data["drug_id"]]]
 end

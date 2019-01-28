@@ -1,9 +1,10 @@
 """
 Creates a Cell line object from JSON. Creates Gene (or Protein) objects on the fly as needed.
 """
-function create_cell_line(experiment::Experiment, data::Dict{String, Any}; for_prediction::Bool=false)
+function create_cell_line(experiment_id::String, data::Dict{String, Any}; for_prediction::Bool=false)
+	experiment = get_experiment(experiment_id)
 	log_message("fetching/creating cell line...")
-	cl = get_cell_line(experiment, data, for_prediction = for_prediction)
+	cl = get_cell_line(experiment_id, data, for_prediction = for_prediction)
 	if haskey(data, "views")
 		# construct the views
 		views = data["views"]
@@ -16,51 +17,51 @@ function create_cell_line(experiment::Experiment, data::Dict{String, Any}; for_p
 				key_type = Gene
 			end
 			data_view = get_dataview!(cl, view_type, DataView{key_type, view_type}(cl.id))
-			populate_data_view!(experiment, data_view, v)
+			populate_data_view!(experiment_id, data_view, v)
 			add_view!(experiment, view_type)
 		end
 
 	end
 end
 
-function create_cell_lines(experiment::Experiment, data::Dict{String, Any}; for_prediction::Bool=false)
+function create_cell_lines(experiment_id::String, data::Dict{String, Any}; for_prediction::Bool=false)
     log_message("importing cell lines")
     if haskey(data, "cell_lines")
         cell_lines = data["cell_lines"]
         for cl in cell_lines
-            create_cell_line(experiment, cl, for_prediction = for_prediction)
+            create_cell_line(experiment_id, cl, for_prediction = for_prediction)
         end
     end
 end
 
-function create_genes(experiment::Experiment, data::Dict{String, Any})
+function create_genes(experiment_id::String, data::Dict{String, Any})
     log_message("importing genes")
     if haskey(data, "genes")
         for gene in data["genes"]
-            add_gene(experiment, gene)
+            add_gene(experiment_id, gene)
         end
     end
 end
 
-function create_proteins(experiment::Experiment, data::Dict{String, Any})
+function create_proteins(experiment_id::String, data::Dict{String, Any})
     log_message("importing proteins")
     if haskey(data, "proteins")
         for protein in data["proteins"]
-            add_protein(experiment, protein)
+            add_protein(experiment_id, protein)
         end
     end
 end
 
-function create_drugs(experiment::Experiment, data::Dict{String, Any})
+function create_drugs(experiment_id::String, data::Dict{String, Any})
     log_message("importing drugs")
     if haskey(data, "drugs")
         for drug in data["drugs"]
-            add_drug(experiment, drug)
+            add_drug(experiment_id, drug)
         end
     end
 end
 
-function create_outcomes(experiment::Experiment, data::Dict{String, Any})
+function create_outcomes(experiment_id::String, data::Dict{String, Any})
     log_message("importing outcomes")
     if !haskey(data, "outcome_type")
         throw(ArgumentError("No outcome type specified."))
@@ -71,19 +72,20 @@ function create_outcomes(experiment::Experiment, data::Dict{String, Any})
         throw(ArgumentError("No outcomes specified, provide a dictionary of drug => outcome under the identifier 'outcomes'"))
     end
     outcomes = data["outcomes"]
+	experiment = get_experiment(experiment_id)
     for (drug_name, outcome_data) in outcomes
         log_message("importing outcome for drug $drug_name")
         drug = get_drug!(experiment, drug_name)
-        add_outcome(experiment, drug, outcome_data, outcome_type = outcome_type)
+        add_outcome(experiment_id, drug, outcome_data, outcome_type = outcome_type)
     end
 end
 
-function create_pathways(experiment::Experiment, data::Dict{String, Any})
+function create_pathways(experiment_id::String, data::Dict{String, Any})
     log_message("importing pathway information")
     if haskey(data, "pathways")
         pathways = data["pathways"]
         for pathway_data in pathways
-            add_pathway(experiment, pathway_data)
+            add_pathway(experiment_id, pathway_data)
             log_message("done for $(pathway_data["name"])")
         end
     end
@@ -93,9 +95,9 @@ end
 Populates a data view with ExomeSeq data from JSON data.
 If no protein change is provided, we assume the empty string.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Gene,ExomeSeq}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Gene,ExomeSeq}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, entry)
+		gene = add_gene(experiment_id, entry)
 
 		# mandatory values
         if !haskey(entry, "protein_change")
@@ -146,9 +148,9 @@ end
 """
 Populates a data view with Methylation data from JSON.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Gene, Methylation}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Gene, Methylation}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, entry)
+		gene = add_gene(experiment_id, entry)
 
         # TODO: decide for key name
 		# beta_value = entry["illumina_beta_value"]
@@ -168,9 +170,9 @@ end
 """
 Populate a data view with gene expression data from JSON.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Gene, GeneExpression}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Gene, GeneExpression}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, entry)
+		gene = add_gene(experiment_id, entry)
 
 		expression_value = Float64(entry["expression_value"])
 
@@ -181,9 +183,9 @@ end
 """
 Populate a data view with RNASeq data from JSON.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Gene, RNASeq}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Gene, RNASeq}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, entry)
+		gene = add_gene(experiment_id, entry)
 
 		expression_value = entry["expression_value"]
 
@@ -194,9 +196,9 @@ end
 """
 Populate a data view with RNASeqCall data from JSON.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Gene, RNASeqCall}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Gene, RNASeqCall}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, entry)
+		gene = add_gene(experiment_id, entry)
 
 		expression_status = entry["expression_status"]
 
@@ -207,9 +209,9 @@ end
 """
 Populate a data view with RPPA data from JSON.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Protein, RPPA}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Protein, RPPA}, data::Vector{Any})
 	for entry in data
-		protein = add_protein(experiment, entry)
+		protein = add_protein(experiment_id, entry)
 
 		abundance = entry["protein_abundance"]
 
@@ -220,9 +222,9 @@ end
 """
 Populate a data view with CNV data form JSON.
 """
-function populate_data_view!(experiment::Experiment, d::DataView{Gene, CNV}, data::Vector{Any})
+function populate_data_view!(experiment_id::String, d::DataView{Gene, CNV}, data::Vector{Any})
 	for entry in data
-		gene = add_gene(experiment, entry)
+		gene = add_gene(experiment_id, entry)
 		cnv_value = Float64(entry["gene_level_cnv"])
 		add_measurement!(d, gene, CNV(cnv_value))
 	end
