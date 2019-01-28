@@ -1,12 +1,8 @@
-julia 0.6
+julia 1.0
 CSV
 Distributions
 JSON
-#Plots
-#Rsvg
 UUIDs
 HTTP
 DataFrames
 DataStructures
-SpecialFunctions
-Distributed
