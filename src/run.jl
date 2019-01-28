@@ -17,4 +17,4 @@ using DrugEfficacyPredictor
 @everywhere DrugEfficacyPredictor.set_process_ids($sp, $dp)
 
 # TODO make port configurable
-@spawnat server_process start_server(8888)
+@spawnat sp start_server(8888)
