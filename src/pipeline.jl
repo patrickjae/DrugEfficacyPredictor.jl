@@ -1,5 +1,5 @@
 function log_progress(experiment::Experiment, s::String)
-    push!(training_progress[experiment.internal_id], s)
+    @spawnat server_process push!(training_progress[experiment.internal_id], s)
 end
 
 
@@ -42,6 +42,7 @@ function train(experiment::Experiment, data::Dict{String, Any})
     #     log_progress(experiment, "stacktrace: $(join(st, "\n"))")
     #     @info "caught exception..." st
     # end
+    tar_file
 end
 
 function predict(experiment::Experiment, data::Dict{String, Any})
