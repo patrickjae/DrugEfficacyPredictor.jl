@@ -1,14 +1,19 @@
 # server.jl
-using HTTP, JSON, UUIDs
 
+# create a global variable to keep track of experiments in the server
+const experiments_dictionary = Dict{String, DrugEfficacyPredictor.Experiment}()
+
+# create a training progress message channel
+const training_progress = Dict{String, Vector{String}}()
+
+const result_file_dictionary = Dict{String, String}()
 
 # create an experiment for testing purposes
-experiments_dictionary["test_id"] = DrugEfficacyPredictor.create_experiment()
+experiments_dictionary["test_id"] = DrugEfficacyPredictor.create_experiment("test_id")
 
 # debug_mode = false
 
 server = nothing
-
 
 function get_experiment_id(uri::String)
     experiment_id = ""
@@ -17,11 +22,16 @@ function get_experiment_id(uri::String)
     catch
         throw(ArgumentError("Could not determine experiment ID in URI '$uri'"))
     end
-    if !haskey(experiments_dictionary, experiment_id)
+    if !experiment_exists(experiment_id)
         throw(ArgumentError("Experiment ID '$experiment_id' not found, have you created it?"))
     end
     log_message("extracted experiment object $experiment_id")
     experiment_id
+end
+
+function set_experiment(id::String, experiment::Experiment)
+    global experiments_dictionary[id] = experiment
+    global training_progress[id] = Vector{String}()
 end
 
 get_function_target(uri::String) = HTTP.URIs.splitpath(uri)[4]
@@ -47,19 +57,23 @@ function handle_base_request(req::HTTP.Request)
 end
 
 # computation requests
+experiment_exists(experiment_id::String) = remotecall_fetch((eid) -> haskey(experiments_dictionary, eid), data_process, experiment_id)
+progress_exists(experiment_id::String) = haskey(training_progress, experiment_id)
+result_exists(experiment_id::String) = remotecall_fetch((eid) -> haskey(result_file_dictionary, eid), data_process, experiment_id)
 
 function train_request(req::HTTP.Request)
     request_dictionary = JSON.parse(transcode(String, req.body))
     experiment_id = get_experiment_id(req.target)
-    if !haskey(experiments_dictionary, experiment_id)
+
+    if !experiment_exists(experiment_id)
         req.response.status = 500
         req.response.body = create_response(JSON.json(Dict("status" => "failure", "message" => "Experiment with ID '$experiment_id' does not exist.")))
         return req.response
     end
-    experiment = experiments_dictionary[experiment_id]
+    # experiment = experiments_dictionary[experiment_id]
     log_message("starting train method")
-
-    @spawn train(experiment, request_dictionary)
+    remote_do((eid, req_params) -> train(experiments_dictionary[eid], req_params), data_process, experiment_id, request_dictionary)
+    # @spawn train(experiment, request_dictionary)
 
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Training in progress, check via /experiments/$experiment_id/progress. Once results are ready for download, access them via /experiments/$experiment_id/results.")))
@@ -68,40 +82,43 @@ end
 
 function progress_request(req::HTTP.Request)
     experiment_id = get_experiment_id(req.target)
-    if !haskey(experiments_dictionary, experiment_id)
+    if !progress_exists(experiment_id)
         req.response.status = 500
         req.response.body = create_response(JSON.json(Dict("status" => "failure", "message" => "Experiment with ID '$experiment_id' does not exist.")))
         return req.response
     end
     req.response.status = 200
-    req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => experiment_id, "progress" => training_progress[experiment_id])))
+    # progress = remotecall_fetch((eid) -> training_progress[eid], data_process, experiment_id)
+    progress = training_progress[experiment_id]
+    req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => experiment_id, "progress" => progress)))
     req.response
 end
 
 function results_request(req::HTTP.Request)
     experiment_id = get_experiment_id(req.target)
-    if !haskey(result_file_dictionary, experiment_id)
+    if !result_exists(experiment_id)
         req.response.status = 500
         req.response.body = create_response(JSON.json(Dict("status" => "failure", "message" => "No results found for experiment with ID '$experiment_id'")))
         return req.response
     end
+    result_file = remotecall_fetch((eid) -> result_file_dictionary[eid], data_process, experiment_id)
     req.response.status = 200
     req.response.headers = [Pair("Content-type", "application/zip")]
-    req.response.body = read(result_file_dictionary[experiment_id])
+    req.response.body = read(result_file)
     req.response
 end
 
 function predict_request(req::HTTP.Request)
     request_dictionary = JSON.parse(transcode(String, req.body))
     experiment_id = get_experiment_id(req.target)
-    if !haskey(experiments_dictionary, experiment_id)
+    if !experiment_exists(experiment_id)
         req.response.status = 500
         req.response.body = create_response(JSON.json(Dict("status" => "failure", "message" => "No results found for experiment with ID '$experiment_id'")))
         return req.response
     end
     prediction_result = nothing
     try
-        prediction_result = predict(experiments_dictionary[experiment_id], request_dictionary)
+        prediction_result = remotecall_fetch((eid, req_params) -> predict(experiments_dictionary[eid], req_params), data_process, experiment_id, request_dictionary)
     catch ex
         st = map(string, stacktrace(catch_backtrace()))
         req.response.status = 500
@@ -121,17 +138,19 @@ function handle_create_experiment_request(req::HTTP.Request)
     create_message = "Created new experiment."
     if haskey(request_dictionary, "experiment_id")
         exp_id_wanted = request_dictionary["experiment_id"]
-        if !haskey(experiments_dictionary, exp_id_wanted)
+        if !experiment_exists(exp_id_wanted)
             exp_id = exp_id_wanted
         else
             create_message *= " Your requested experiment_id is already in use, we have created a random one."
         end
     end
-    experiment = DrugEfficacyPredictor.create_experiment()
-    log_message("creating experiment $exp_id")
-    experiment.internal_id = exp_id
-    experiments_dictionary[exp_id] = experiment
-    training_progress[exp_id] = Vector{String}()
+    experiment = remotecall_fetch(DrugEfficacyPredictor.create_experiment, data_process, exp_id)
+    log_message("created experiment $(experiment.internal_id)")
+    # experiment.internal_id = exp_id
+    # remote_do((eid, exprmt) -> experiments_dictionary[eid] = exprmt, data_process, exp_id, experiment)
+    # experiments_dictionary[exp_id] = experiment
+    # remote_do((eid) -> training_progress[eid] = Vector{String}(), data_process, exp_id)
+    training_progress[experiment.internal_id] = Vector{String}()
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => create_message, "experiment_id" => exp_id)))
     req.response
@@ -139,9 +158,11 @@ end
 
 function handle_get_experiment_request(req::HTTP.Request)
     experiment_id = get_experiment_id(req.target)
-    experiment = experiments_dictionary[experiment_id]
+    response_string = remotecall_fetch((eid) -> to_json(experiments_dictionary[eid]), data_process, experiment_id)
+    # experiment = experiments_dictionary[experiment_id]
     req.response.status = 200
-    req.response.body = create_response(JSON.json(to_json(experiment)))
+    # req.response.body = create_response(JSON.json(to_json(experiment)))
+    req.response.body = create_response(JSON.json(response_string))
     req.response
 end
 
@@ -149,8 +170,8 @@ function handle_delete_experiment_request(req::HTTP.Request)
     experiment_id = get_experiment_id(req.target)
     message = "Deleted experiment with id '$experiment_id'"
     status = "success"
-    if haskey(experiments_dictionary, experiment_id)
-        delete!(experiments_dictionary, experiment_id)
+    if exists(experiment_id)
+        remote_do((eid) -> delete!(experiments_dictionary, eid), data_process, experiment_id)
     else
         message = "Experiment with id '$experiment_id' does not exist."
         status = "failure"
@@ -171,16 +192,15 @@ function handle_collection_request(req::HTTP.Request, action::String)
     data_target = get_function_target(target)
 
     target_function = eval(Meta.parse("$(action)_$data_target"))
-
-    try  catch end
-
     try
         obj = nothing
         if action == "create"
             request_dictionary = JSON.parse(transcode(String, req.body))
-            target_function(experiments_dictionary[experiment_id], request_dictionary)
+            remote_do(target_function, data_process, experiment_id, request_dictionary)
+            # target_function(experiments_dictionary[experiment_id], request_dictionary)
         else
-            obj = target_function(experiments_dictionary[experiment_id])
+            obj = remotecall_fetch(target_function, data_process, experiment_id)
+            # obj = target_function(experiments_dictionary[experiment_id])
         end
         req.response.status = 200
         if obj == nothing
@@ -216,7 +236,8 @@ function handle_object_request(req::HTTP.Request, action::String)
     #get the object
     getter_function = eval(Meta.parse("$(action)_$get_target"))
     try
-        obj = getter_function(experiments_dictionary[experiment_id], get_target_id)
+        obj = remotecall_fetch((eid, tid) -> getter_function(experiments_dictionary[eid], tid), data_process, experiment_id, get_target_id)
+        # obj = getter_function(experiments_dictionary[experiment_id], get_target_id)
         req.response.status = 200
         if obj == nothing
             if action == "get"
@@ -265,6 +286,7 @@ JSON representation of a list of genes.
 
 """
 function create_base_router()
+    println("start create router")
     r = HTTP.Handlers.Router()
     base_uri = HTTP.URI(path="/")
     HTTP.register!(r, base_uri, HTTP.Handlers.HandlerFunction(handle_base_request))
@@ -300,19 +322,17 @@ function create_base_router()
     HTTP.register!(r, "GET", HTTP.URI(path="/experiments/*/progress"), HTTP.Handlers.HandlerFunction(progress_request))
     HTTP.register!(r, "GET", HTTP.URI(path="/experiments/*/results"), HTTP.Handlers.HandlerFunction(results_request))
     HTTP.register!(r, "POST", HTTP.URI(path="/experiments/*/predict"), HTTP.Handlers.HandlerFunction(predict_request))
-
+    println("finish create router")
     r
 end
 
-stop_server(server::HTTP.Server) = put!(server.in, HTTP.Servers.KILL)
-
+stop_server(server::HTTP.Server) = @spawnat server_process put!(DrugEfficacyPredictor.server.in, HTTP.Servers.KILL)
 
 function start_server(port::Int64)
-	# global server = HTTP.Server(create_http_handler())
-    global server = HTTP.Server(create_base_router())
-	try
-		HTTP.serve(server, "127.0.0.1", port, verbose = true)
-	finally
-		stop_server(server)
+    global server = HTTP.Server(DrugEfficacyPredictor.create_base_router())
+    try
+        HTTP.serve(DrugEfficacyPredictor.server, "127.0.0.1", port, verbose = true)
+    finally
+        stop_server(DrugEfficacyPredictor.server)
 	end
 end

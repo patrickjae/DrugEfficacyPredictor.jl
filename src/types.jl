@@ -1,5 +1,3 @@
-using DataStructures
-
 ##############################################################################################################
 ##############################################################################################################
 ########################################         DATA          ###############################################
@@ -321,7 +319,7 @@ mutable struct Experiment
 	pathway_information::OrderedDict{String, Pathway}
 	is_normalized::Bool
 	internal_id::String
-	function Experiment()
+	function Experiment(id::String)
 		new(
 			OrderedDict{Drug, Outcome}(), # results
 			# OrderedDict{Drug, Outcome}(), # test results
@@ -335,7 +333,7 @@ mutable struct Experiment
 			Dict{Type{<:ViewType}, OrderedDict{KeyType, Tuple{Float64, Float64}}}(), # statistics
 			OrderedDict{String, Pathway}(), #pathways
 			false, # is normalized
-			""
+			id
 			)
 	end
 end
