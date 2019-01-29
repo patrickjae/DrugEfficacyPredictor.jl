@@ -191,7 +191,7 @@ get_cell_line_names_from_data_frame(::Type{<:Union{RNASeq, RNASeqCall, RPPA, CNV
 extract_column_names(df::DataFrame, first_used_column::Int64) = map(uppercase, map(string, names(df)[first_used_column:end]))
 
 function populate_data_view!(data_view::DataView{Gene,ExomeSeq}, df::DataFrame, experiment::Experiment)
-	cl_df = view(df, df[:CellLine] .== data_view.cell_line_id)
+	cl_df = DataFrames.filter(r -> r[:CellLine] == data_view.cell_line_id, df)
 	for data_row in eachrow(cl_df)
 		gene = get_gene(experiment, data_row[:HGNC_ID])
 		num_cosmic = data_row[Symbol("#Cosmic")]
