@@ -3,7 +3,8 @@ function log_progress(experiment::Experiment, s::String)
 end
 
 
-function train(experiment::Experiment, data::Dict{String, Any})
+function train(experiment_id::String, data::Dict{String, Any})
+    experiment = get_experiment(experiment_id)
     log_message("in train method")
     # try
         # extract inference config
