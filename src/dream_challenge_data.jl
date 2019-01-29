@@ -1,9 +1,10 @@
 function load_dream_challenge_data()
 	directory = joinpath(PROJECT_ROOT, "data", "dream_challenge")
 	log_message("importing dream challenge data from $directory")
-	experiment = create_experiment()
-	experiments_dictionary["dream_challenge"] = experiment
-	training_progress["dream_challenge"] = Vector{String}()
+	experiment = create_experiment("dream_challenge")
+	init_training_progress("dream_challenge")
+	# experiments_dictionary["dream_challenge"] = experiment
+	# training_progress["dream_challenge"] = Vector{String}()
 	for f in readdir(directory)
 		if !endswith(f,".txt") || endswith(f, "README.txt")
 			continue
