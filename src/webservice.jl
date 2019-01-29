@@ -22,9 +22,9 @@ function get_experiment_id(uri::String)
     catch
         throw(ArgumentError("Could not determine experiment ID in URI '$uri'"))
     end
-    if !experiment_exists(experiment_id)
-        throw(ArgumentError("Experiment ID '$experiment_id' not found, have you created it?"))
-    end
+    # if !experiment_exists(experiment_id)
+    #     throw(ArgumentError("Experiment ID '$experiment_id' not found, have you created it?"))
+    # end
     log_message("extracted experiment object $experiment_id")
     experiment_id
 end
@@ -39,6 +39,7 @@ get_object_id(uri::String) = HTTP.URIs.splitpath(uri)[5]
 
 create_response(s::String) = collect(codeunits(s))
 
+init_training_progress(experiment_id::String) = remote_do((eid) -> training_progress[eid] = Vector{String}(), server_process, experiment_id)
 
 # base requests
 function handle_base_request(req::HTTP.Request)
@@ -58,7 +59,7 @@ end
 
 # computation requests
 experiment_exists(experiment_id::String) = remotecall_fetch((eid) -> haskey(experiments_dictionary, eid), data_process, experiment_id)
-progress_exists(experiment_id::String) = haskey(training_progress, experiment_id)
+progress_exists(experiment_id::String) = remotecall_fetch((eid) -> haskey(training_progress, eid), server_process, experiment_id)
 result_exists(experiment_id::String) = remotecall_fetch((eid) -> haskey(result_file_dictionary, eid), data_process, experiment_id)
 
 function train_request(req::HTTP.Request)
@@ -72,8 +73,7 @@ function train_request(req::HTTP.Request)
     end
     # experiment = experiments_dictionary[experiment_id]
     log_message("starting train method")
-    remote_do((eid, req_params) -> train(experiments_dictionary[eid], req_params), data_process, experiment_id, request_dictionary)
-    # @spawn train(experiment, request_dictionary)
+    remote_do(train, data_process, experiment_id, request_dictionary)
 
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Training in progress, check via /experiments/$experiment_id/progress. Once results are ready for download, access them via /experiments/$experiment_id/results.")))
@@ -87,9 +87,10 @@ function progress_request(req::HTTP.Request)
         req.response.body = create_response(JSON.json(Dict("status" => "failure", "message" => "Experiment with ID '$experiment_id' does not exist.")))
         return req.response
     end
+    log_message("found experiment id in progress tracker")
     req.response.status = 200
     # progress = remotecall_fetch((eid) -> training_progress[eid], data_process, experiment_id)
-    progress = training_progress[experiment_id]
+    progress = @fetchfrom server_process training_progress[experiment_id]
     req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => experiment_id, "progress" => progress)))
     req.response
 end
@@ -150,7 +151,8 @@ function handle_create_experiment_request(req::HTTP.Request)
     # remote_do((eid, exprmt) -> experiments_dictionary[eid] = exprmt, data_process, exp_id, experiment)
     # experiments_dictionary[exp_id] = experiment
     # remote_do((eid) -> training_progress[eid] = Vector{String}(), data_process, exp_id)
-    training_progress[experiment.internal_id] = Vector{String}()
+    init_training_progress(experiment_id)
+    # training_progress[experiment.internal_id] = Vector{String}()
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => create_message, "experiment_id" => exp_id)))
     req.response
