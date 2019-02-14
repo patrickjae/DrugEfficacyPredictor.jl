@@ -2,12 +2,18 @@
 
 # create the overall data set
 function create_experiment(id::String = string(UUIDs.uuid4()))
-	experiments_dictionary[id] = Experiment(id)
-	training_progress[id] = Vector{String}()
-	experiments_dictionary[id]
+	Core.println("Data.create_experiment($id)")
+	experiments[id] = Experiment(id)
+	experiments[id]
 end
 
-get_experiment(id::String) = experiments_dictionary[id]
+function get_experiment(id::String)
+	if haskey(experiments, id)
+		return experiments[id]
+	else
+		throw(ArgumentError("unknown experiment id: $id"))
+	end
+end
 
 ######### CELL LINES ###########
 # get a cell line object for an experiment or creates a new one
@@ -340,7 +346,6 @@ end
 function filter_data_views(experiment::Experiment; proportion_kept = .1)
 	for v in experiment.views
 		if v == RNASeqCall continue end
-		log_message("filtering view $v")
 		stats = experiment.statistics[v]
 		last_idx = 	Int64(ceil(length(stats) * proportion_kept))
 		sorted_idx = sortperm(map(val -> val[2], values(stats)), rev=true)
@@ -351,6 +356,17 @@ function filter_data_views(experiment::Experiment; proportion_kept = .1)
 				empty!(cl.views[v].used_keys)
 				filtered_key_set = intersect(top_variance_keys, unique(keys(cl.views[v].measurements)))
 				union!(cl.views[v].used_keys, filtered_key_set)
+			end
+		end
+	end
+end
+
+function unfilter_data_views(experiment::Experiment)
+	for v in experiemnt.views
+		if v == RNASeqCall continue end
+		for cl in values(experiment.cell_lines)
+			if haskey(cl.views, v)
+				cl.views[v].used_keys = unique(keys(cl.views[v].measurements))
 			end
 		end
 	end

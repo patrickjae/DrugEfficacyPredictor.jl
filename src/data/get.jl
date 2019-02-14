@@ -1,10 +1,19 @@
+#aliases
+get_cell_lines(experiment_id::String) = to_json(collect(values(get_experiment(experiment_id).cell_lines)))
+get_drugs(experiment_id::String) = to_json(collect(values(get_experiment(experiment_id).drugs)))
+get_genes(experiment_id::String) = to_json(union(collect(values(get_experiment(experiment_id).genes)), collect(values(get_experiment(experiment_id).genes_by_hgnc)), collect(values(get_experiment(experiment_id).genes_by_ensembl))))
+get_proteins(experiment_id::String) = to_json(get_experiment(experiment_id).proteins)
+get_pathways(experiment_id::String) = to_json(collect(values(get_experiment(experiment_id).pathway_information)))
+get_outcomes(experiment_id::String) = to_json(collect(values(get_experiment(experiment_id).results)))
+
 function to_json(data)
     response = Dict{String, Any}()
     response["message"] = "JSON serialization not yet implemented for $(typeof(data))"
     response
 end
 
-function to_json(data::Experiment)
+function to_json(experiment_id::String)
+    data = get_experiment(experiment_id)
     response = Dict{String, Any}()
     response["results"] = to_json(collect(values(data.results)))
     # response["test_results"] = to_json(collect(values(data.test_results)))
@@ -25,15 +34,7 @@ function to_json(data::Vector{Any})
     ret
 end
 
-#aliases
-get_cell_lines(data::Experiment) = to_json(collect(values(data.cell_lines)))
-get_drugs(data::Experiment) = to_json(collect(values(data.drugs)))
-get_genes(data::Experiment) = to_json(union(collect(values(experiment.genes)), collect(values(experiment.genes_by_hgnc)), collect(values(experiment.genes_by_ensembl))))
-get_proteins(data::Experiment) = to_json(data.proteins)
-get_pathways(data::Experiment) = to_json(collect(values(data.pathway_information)))
-get_outcomes(data::Experiment) = to_json(collect(values(data.results)))
-
-function to_json(data::CellLine) 
+function to_json(data::CellLine)
     response = Dict{String, Any}()
     response["id"] = data.id
     response["cancer_type"] = data.cancer_type
