@@ -8,5 +8,9 @@
         "do_cross_validation" : false,
         "do_variance_filtering" : true,
         "subsume_pathways" : true
+    },
+    "model_configuration":
+    {
+        "model":"BMTMKLModel"
     }
 }
