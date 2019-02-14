@@ -1,11 +1,15 @@
 function load_iorio_data(req::HTTP.Request)
-    request_dictionary = JSON.parse(transcode(String, req.body))
+    request_dictionary = Dict{String, String}()
+    if length(req.body) > 0
+        request_dictionary = JSON.parse(transcode(String, req.body))
+    end
     host = "localhost"
     base_dir = joinpath(PROJECT_ROOT, "data", "iorio")
     force_reload = haskey(request_dictionary, "force_reload") ? request_dictionary["force_reload"] : false
-    if experiment_exists("iorio")
+    if Utils.experiment_registered("iorio")
         if force_reload
-            delete_experiment("iorio")
+            proc_id = Utils.unregister_experiment("iorio")
+            remotecall_wait(Data.delete_experiment, proc_id, "iorio")
         else
             req.response.status = 200
             req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Iorio data set already exists, returning experiment ID. If you need to reload, call with parameter force_reload = true", "experiment_id" => "iorio")))
@@ -14,7 +18,8 @@ function load_iorio_data(req::HTTP.Request)
     end
 
     # create the experiment
-    run(`curl -X POST http://$host:$port/experiments -d '{"experiment_id":"iorio"}'`)
+    new_proc_id = Utils.register_experiment("iorio")
+    remotecall_wait(Data.create_experiment, new_proc_id, "iorio")
 
     #import the cell lines
     for f in readdir(joinpath(base_dir, "cell_lines"))
@@ -23,18 +28,16 @@ function load_iorio_data(req::HTTP.Request)
         cl_cmd = `curl -X POST http://$host:$port/experiments/iorio/data/cell_line -d @$filename`
         run(cl_cmd)
     end
-    log_message("imported cell lines")
 
     #import the outcome, use AUC for the time being
     outcome_file = joinpath(PROJECT_ROOT, "data", "iorio", "json_AUCvalues.txt")
     outcome_add_cmd = `curl -X POST http://$host:$port/experiments/iorio/data/outcomes -d @$outcome_file`
     run(outcome_add_cmd)
-    log_message("imported outcomes")
 
     # add pathway info
     pw_file = joinpath(PROJECT_ROOT, "data", "json", "pathways_current.json")
     run(`curl -X POST http://$host:$port/experiments/iorio/data/pathways -d @$pw_file`)
-    log_message("imported pathway info")
+
     req.response.status = 200
     req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Created Iorio data set", "experiment_id" => "iorio")))
     return req.response
