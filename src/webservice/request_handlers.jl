@@ -31,7 +31,7 @@ function train_request(req::HTTP.Request)
        return no_experiment_response(req)
    end
    proc_id = experiments_dictionary[experiment_id]
-   @spawnat proc_id train(experiment_id, request_dictionary)
+   @spawnat proc_id Models.train(experiment_id, request_dictionary)
 
    req.response.status = 200
    req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Training in progress, check via /experiments/$experiment_id/progress. Once results are ready for download, access them via /experiments/$experiment_id/results.")))
@@ -74,7 +74,7 @@ function predict_request(req::HTTP.Request)
 
    prediction_result = nothing
    try
-       prediction_result = remotecall_fetch(predict, proc_id, experiment_id, request_dictionary)
+       prediction_result = remotecall_fetch(Models.predict, proc_id, experiment_id, request_dictionary)
    catch ex
        st = map(string, stacktrace(catch_backtrace()))
        req.response.status = 500
