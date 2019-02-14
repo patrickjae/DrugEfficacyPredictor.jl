@@ -21,11 +21,11 @@ function to_json(experiment_id::String)
     response["genes"] = to_json(union(collect(values(data.genes)), collect(values(data.genes_by_hgnc)), collect(values(data.genes_by_ensembl))))
     response["proteins"] = to_json(data.proteins)
     response["views"] = map(v -> string(v), data.views)
-    response["pathways"] = to_json(data.pathway_information)
+    response["pathways"] = to_json(collect(values(data.pathway_information)))
     response
 end
 
-function to_json(data::Vector{Any})
+function to_json(data::Vector)
     ret = Vector{Dict{String, Any}}()
     for obj in data
         push!(ret, to_json(obj))
@@ -38,8 +38,8 @@ function to_json(data::CellLine)
     response["id"] = data.id
     response["cancer_type"] = data.cancer_type
     response["views"] = Dict{String, Any}()
-    for (view_type, view_data) in cl.views
-        response[view_type] = to_json(view_data)
+    for (view_type, view_data) in data.views
+        response[string(view_type)] = to_json(view_data)
     end
     response["in_test_set"] = data.in_test_set
     response
