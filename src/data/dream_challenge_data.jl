@@ -2,9 +2,6 @@ function load_dream_challenge_data()
 	directory = joinpath(PROJECT_ROOT, "data", "dream_challenge")
 	log_message("importing dream challenge data from $directory")
 	experiment = create_experiment("dream_challenge")
-	init_training_progress("dream_challenge")
-	# experiments_dictionary["dream_challenge"] = experiment
-	# training_progress["dream_challenge"] = Vector{String}()
 	for f in readdir(directory)
 		if !endswith(f,".txt") || endswith(f, "README.txt")
 			continue
@@ -181,7 +178,7 @@ function load_dream_challenge_data()
 		end
 	end
 	log_message("number of genes now: Entrez=$(length(experiment.genes)), HGNC=$(length(experiment.genes_by_hgnc)) Ensembl=$(length(experiment.genes_by_ensembl))")
-	experiment
+	# experiment
 end
 
 get_cell_line_names_from_data_frame(::Type{ExomeSeq}, df::DataFrame) = map(string, map(v->uppercase(v), unique(df[:CellLine])))
