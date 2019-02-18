@@ -26,6 +26,7 @@ function create_base_router()
     HTTP.@register(r, "/", HTTP.Handlers.HandlerFunction(handle_base_request))
 	# load sample data
 	HTTP.@register(r, "/load_iorio_data", load_iorio_data)
+	HTTP.@register(r, "/load_dream_challenge_data", load_dream_challenge_data)
     # experiment methods
     # create experiments
     HTTP.@register(r, "POST", "/experiments", handle_create_experiment_request)
@@ -57,5 +58,6 @@ function create_base_router()
     HTTP.@register(r, "GET", "/experiments/*/progress", progress_request)
     HTTP.@register(r, "GET", "/experiments/*/results", results_request)
     HTTP.@register(r, "POST", "/experiments/*/predict", predict_request)
+	HTTP.@register(r, "POST", "/debug", debug_request)
     r
 end
