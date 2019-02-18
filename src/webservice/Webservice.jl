@@ -1,6 +1,6 @@
 module Webservice
 using HTTP, JSON, UUIDs, Distributed, Sockets
-using ..Data, ..Models
+using ..Data, ..Models, ..Utils
 import ..Utils: log_message, log_progress, PROJECT_ROOT
 
 include("utils.jl")
