@@ -1,150 +1,13 @@
-function ModelConfiguration(
-	::Type{BMTMKLModel},
-	⍺::Float64,
-	β::Float64,
-	μ::Float64,
-	σ::Float64;
-	pm::PredictionModel
-)
-	mc = ModelConfiguration()
-	# Gamma params for precision on bias term b
-	mc.parameters["⍺_ɣ"] = α
-	mc.parameters["β_ɣ"] = β
-	# Gamma params for precision on weights a
-	mc.parameters["⍺_λ"] = α
-	mc.parameters["β_λ"] = β
-	# Gamma params for precision on outcome y
-	mc.parameters["⍺_ε"] = α
-	mc.parameters["β_ε"] = β
-	# Gamma params for precision on intermediate results g
-	mc.parameters["⍺_ν"] = α
-	mc.parameters["β_ν"] = β
-	# Gamma params for precision on kernel weights e
-	mc.parameters["⍺_⍵"] = α
-	mc.parameters["β_⍵"] = β
-
-	# normal params for mean on bias
-	mc.parameters["μ_b"] = 0.
-	mc.parameters["𝜎_b"] = σ
-	# normal params for mean on kernel weights
-	mc.parameters["μ_e"] = μ
-	mc.parameters["σ_e"] = σ
-	# mv normal params for weights
-	mc.parameters["μ_a"] = μ
-	mc.parameters["Σ_a"] = σ
-	# mv normal weights for intermediate results
-	mc.parameters["μ_g"] = μ
-	mc.parameters["Σ_g"] = σ
-
-	mc.parameters["T"] = length(pm.data.results)
-	mc.parameters["N"] = Vector{Int64}(mc.parameters["T"])
-	for (t, drug) in enumerate(keys(pm.data.results))
-		mc.parameters["N"][t] = length(pm.data.results[drug].outcome_values)
-	end
-	# recompute overall number of kernels (+4 accomodates for combined kernels)
-	mc.parameters["K"] = length(pm.precomputations["base_kernels"]) + sum(map(length, collect(values(m.precomputations["pathway_specific_kernels"])))) + 4
-	mc
-end
-
-function ModelConfiguration(mtype::Type{BMTMKLModel}, pm::PredictionModel)
-	ModelConfiguration(mtype, 1000., 1000., 1., 2., pm)
-end
-
-mutable struct BMTMKLModelParameters <: PredictionModelParameters
-	# precision parameters, T-dimensional, one per drug/task
-	# ɣ::IsometricPrecisionParameter #precision to b <-- could be a matrix introducing covariance between drugs
-	ɣ::Vector{GammaParameter}
-	# drug specific scalars, T-dimensional
-	b::Vector{NormalParameter}
-
-	# λ::Vector{IsometricPrecisionParameter} #precision to a <-- introduce covariance between cell lines
-	λ::Vector{Vector{GammaParameter}}
-	# drug specific vectors, TxN_t dimensional
-	# a::Vector{Vector{NormalParameter}}
-	a::Vector{MvNormalParameter}
-
-	# ε::IsometricPrecisionParameter #precision to y <-- between drugs
-	ε::Vector{GammaParameter}
-
-	# ν::IsometricPrecisionParameter #precision to g <-- between drugs and views?
-	ν::Vector{GammaParameter}
-	# intermediate results, N_t dimensional, one per drug and view
-	G::Matrix{MvNormalParameter}
-
-	# precision parameter, K-dimensional, one per view
-	# ⍵::IsometricPrecisionParameter
-	⍵::Vector{GammaParameter}
-	# view specific scalars, K-dimensional
-	e::Vector{NormalParameter}
-
-	function BMTMKLModelParameters(mc::ModelConfiguration)
-		p = new()
-		T = mc.parameters["T"]
-		N = mc.parameters["N"]
-		K = mc.parameters["K"]
-		p.ɣ = VectorGammaParameter(undef, T)
-		p.b = Vector{NormalParameter}(undef, T)
-		for t in 1:T
-			p.ɣ[t] = GammaParameter(mc.parameters["⍺_ɣ"], mc.parameters["β_ɣ"])
-			p.b[t] = NormalParameter(mc.parameters["μ_b"], mc.parameters["σ_b"])
-			set_variable_name(p.ɣ[t], "ɣ[$t]")
-			set_variable_name(p.b[t], "b[$t]")
-		end
-
-		p.λ = Vector{VectorGammaParameter}(undef, T)
-		# p.a = Vector{Vector{NormalParameter}}(T)
-		p.a = Vector{MvNormalParameter}(undef, T)
-		for t in 1:T
-			p.λ[t] = VectorGammaParameter(undef, N[t])
-			p.a[t] = MvNormalParameter(mc.parameters["μ_a"], mc.parameters["Σ_a"], N[t])
-			# p.a[t] = Vector{NormalParameter}(N[t])
-			set_variable_name(p.a[t], "a[$t]")
-			for n in 1:N[t]
-				p.λ[t][n] = GammaParameter(mc.parameters["⍺_λ"], mc.parameters["β_λ"])
-				set_variable_name(p.ɣ[t], "λ[$t][$n]")
-				# p.a[t][n] = NormalParameter(m_0, s_0)
-			end
-		end
-
-		p.ε = VectorGammaParameter(undef, T)
-		for t in 1:T
-			p.ε[t] = GammaParameter(mc.parameters["⍺_ε"], mc.parameters["β_ε"])
-			set_variable_name(p.ε[t], "ε[$t]")
-		end
-
-		p.ν = VectorGammaParameter(undef, T)
-		for t in 1:T
-			p.ν[t] = GammaParameter(mc.parameters["⍺_ν"], mc.parameters["β_ν"])
-			set_variable_name(p.ν[t], "ν[$t")
-		end
-		p.G = Matrix{MvNormalParameter}(undef, T, K)
-		for t in 1:T, k in 1:K
-			p.G[t,k] = MvNormalParameter(mc.parameters["μ_g"], mc.parameters["Σ_g"], N[t])
-			set_variable_name(p.G[t,k], "G[$t,$k]")
-		end
-
-		p.⍵ = VectorGammaParameter(undef, K)
-		p.e = Vector{NormalParameter}(undef, K)
-		for k in 1:K
-			p.⍵[k] = GammaParameter(mc.parameters["⍺_⍵"], mc.parameters["β_⍵"])
-			p.e[k] = NormalParameter(mc.parameters["μ_e"], mc.parameters["σ_e"])
-			set_variable_name(p.⍵[k], "⍵[$k]")
-			set_variable_name(p.e[k], "e[$k]")
-		end
-		p
-	end
-
-end
-
+include("types.jl")
 include("bmtmkl_init.jl")
 
-function inference(::Type{BMTMKLModel}, m::PredictionModel, mc::ModelConfiguration; inference_config::InferenceConfiguration = InferenceConfiguration())
+function inference(m::PredictionModel{BMTMKLModel}, mc::ModelConfiguration; inference_config::InferenceConfiguration = InferenceConfiguration())
 	params = BMTMKLModelParameters(mc)
-	kernel_products = Dict{String, Matrix{Float64}}()
-	for (t, d) in enumerate(collect(keys(m.data.drugs)))
-		views = m.precomputations["kernels"][d]
-		kp = zeros(mc.N[t], mc.N[t])
-		for kernel in views
+	kernel_products = Dict{Drug, Matrix{Float64}}()
+	for (t, d) in enumerate(keys(m.data.results))
+		kernels = m.precomputations["kernels"][d]
+		kp = zeros(params.N[d], params.N[d])
+		for kernel in kernels
 			kp += kernel'*kernel
 		end
 		kernel_products[d] = kp
@@ -160,7 +23,7 @@ function inference(::Type{BMTMKLModel}, m::PredictionModel, mc::ModelConfigurati
 	test_errs = Float64[]
 	# while err_convergence > convergence_criterion || iter < min_iter
 	while convergence > inference_config.convergence_criterion || iter < inference_config.min_iter
-		ll, err = parameter_inference_step(m, mc, params, kernel_products)
+		ll, err = parameter_inference_step(m, params, kernel_products)
 		convergence = (old_ll - ll)/old_ll
 		# convergence = (old_err - err)/old_err
 		# break
@@ -179,21 +42,21 @@ function inference(::Type{BMTMKLModel}, m::PredictionModel, mc::ModelConfigurati
 	(lls, errs, test_errs, params, convergence)
 end
 
-function test(m::PredictionModel, params::BMTMKLModelParameters)
+function test(m::PredictionModel{BMTMKLModel}, params::BMTMKLModelParameters)
     mse = 0
 
-    rankings = Dict{String, Vector{Int64}}()
-    predictions = Dict{String, Vector{Float64}}()
+    rankings = Dict{Drug, Vector{Int64}}()
+    predictions = Dict{Drug, Vector{Float64}}()
     sum_data_points = 0
-    for (t, drug) in enumerate(collect(keys(m.data.drugs)))
+    for (t, drug) in enumerate(keys(m.data.results))
+		kernels = m.precomputations["cross_kernels"][drug]
+		G = Vector{Vector{Float64}}(undef, length(kernels))
+		exp_a = expected_value(params.a[t])
+		[G[k] = kernel * exp_a for (k, kernel) in enumerate(kernels)]
 
-        G = Vector{Vector{Float64}}(undef, length(m.precomputations["cross_kernels"][drug]))
-        exp_a = expected_value(params.a[t])
-        for (k, c_kernel) in enumerate(m.precomputations["cross_kernels"][drug])
-            G[k] = c_kernel * exp_a
-        end
+        y_mean = sum(G .* expected_value.(params.e)) .+ expected_value(params.b[t])
 
-        y_mean = sum([G[k] .* expected_value(params.e[k]) for k in 1:length(G)]) .+ expected_value(params.b[t])
+        # y_mean = sum([G[k] .* expected_value(params.e[k]) for k in 1:length(G)]) .+ expected_value(params.b[t])
 
         #########################
         # compute the ranking
@@ -224,7 +87,7 @@ function test(m::PredictionModel, params::BMTMKLModelParameters)
 end
 
 
-function predict_outcomes(m::PredictionModel, params::BMTMKLModelParameters, cell_lines::Vector{CellLine}; held_out::Bool = false)
+function predict_outcomes(m::PredictionModel{BMTMKLModel}, params::BMTMKLModelParameters, cell_lines::Vector{CellLine}; held_out::Bool = false, inference_config::InferenceConfiguration = InferenceConfiguration())
     predictions = Dict{Drug, Vector{Float64}}()
     ranks = Dict{Drug, Vector{Int64}}()
     # all cell lines present for training
@@ -235,7 +98,7 @@ function predict_outcomes(m::PredictionModel, params::BMTMKLModelParameters, cel
 
 	#if dealing with held out data, ignore validation data and recompute all kernels
     if held_out
-        (base_cross_kernels, pw_specific_cross_kernels) = compute_all_kernels(m.data, all_cell_lines, cell_lines, subsume_pathways = mc.subsume_pathways)
+        (base_cross_kernels, pw_specific_cross_kernels) = compute_all_kernels(m.data, all_cell_lines, cell_lines, subsume_pathways = inference_config.subsume_pathways)
     end
 
 	num_cross_kernels = length(base_cross_kernels) + sum(map(length, collect(values(pw_specific_cross_kernels)))) + 4
@@ -292,18 +155,18 @@ end
 
 
 # actual variational inference algorithm
-function parameter_inference_step(m::PredictionModel, mc::ModelConfiguration, params::BMTMKLModelParameters, kernel_products::Dict{String, Matrix{Float64}})
-	g_times_kernel = update_intermed_kernel_sum(m)
+function parameter_inference_step(m::PredictionModel{BMTMKLModel}, params::BMTMKLModelParameters, kernel_products::Dict{Drug, Matrix{Float64}})
+	g_times_kernel = update_intermed_kernel_sum(m, params)
 	# updates for model parameters in turn
 	ll = 0
-	T = mc.parameters["T"]
-	N = mc.parameters["N"]
-	K = mc.parameters["K"]
-	for (t, drug) in enumerate(keys(m.data.drugs))
+	T = params.T
+	N = params.N
+	K = params.K
+	for (t, drug) in enumerate(keys(m.data.results))
 		exp_gte = sum(expected_value.(params.e) .* expected_value.(params.G[t,:]))
 		# lambda
 		a_square = expected_squared_value(params.a[t])
-		for n in 1:N[t]
+		for n in 1:N[drug]
 			params.λ[t][n].variational_a = params.λ[t][n].prior_a + .5
 			params.λ[t][n].variational_b = params.λ[t][n].prior_b + .5*a_square[n,n]
 		end
@@ -318,16 +181,16 @@ function parameter_inference_step(m::PredictionModel, mc::ModelConfiguration, pa
 		# gamma
 		params.ɣ[t].variational_a = params.ɣ[t].prior_a + .5
 		params.ɣ[t].variational_b = params.ɣ[t].prior_b + .5*expected_squared_value(params.b[t])
-		ll += elbo(m.ɣ[t])
+		ll += elbo(params.ɣ[t])
 
 		# b
 		ε_expected = expected_value(params.ε[t])
-		params.b[t].variational_variance = 1. / (expected_value(params.ɣ[t]) + ε_expected * N[t])
+		params.b[t].variational_variance = 1. / (expected_value(params.ɣ[t]) + ε_expected * N[drug])
 		params.b[t].variational_mean = params.b[t].variational_variance * ε_expected * sum(m.precomputations["targets"][drug] .- exp_gte)
 		ll += elbo(params.b[t])
 
 		# nu
-		params.ν[t].variational_a = params.ν[t].prior_a + .5*(K * N[t])
+		params.ν[t].variational_a = params.ν[t].prior_a + .5*(K * N[drug])
 		params.ν[t].variational_b = params.ν[t].prior_b +
 						.5*tr(sum(expected_squared_value.(params.G[t,:]))) -
 						sum(transpose.(expected_value.(params.G[t,:])) .* m.precomputations["kernels"][drug]) * expected_value(params.a[t]) +
@@ -335,12 +198,12 @@ function parameter_inference_step(m::PredictionModel, mc::ModelConfiguration, pa
 		ll += elbo(params.ν[t])
 
 		# epsilon
-		params.ε[t].variational_a = params.ε[t].prior_a + .5 * N[t]
+		params.ε[t].variational_a = params.ε[t].prior_a + .5 * N[drug]
 		eps_beta_update = dot(m.precomputations["targets"][drug], m.precomputations["targets"][drug])
 		eps_beta_update -= 2 * dot(m.precomputations["targets"][drug], exp_gte .+ expected_value(params.b[t]))
 		eps_beta_update += sum(expected_squared_value.(params.e) .* tr.(expected_squared_value.(params.G[t,:])))
 		eps_beta_update -= 2 * sum(exp_gte .* expected_value(params.b[t]))
-		eps_beta_update += m.N[t] * expected_squared_value(params.b[t])
+		eps_beta_update += N[drug] * expected_squared_value(params.b[t])
 		params.ε[t].variational_b = params.ε[t].prior_b + .5 * eps_beta_update
 		ll += elbo(params.ε[t])
 	end
@@ -365,15 +228,16 @@ function parameter_inference_step(m::PredictionModel, mc::ModelConfiguration, pa
 		params.e[k].variational_mean = params.e[k].variational_variance * eta1
 		ll += elbo(params.e[k])
 	end
+
 	# G
-	for (t, drug) in enumerate(all_tasks)
+	for (t, drug) in enumerate(keys(m.data.results))
 		exp_g_sum = sum(expected_value.(params.G[t,:]) .* expected_value.(params.e))
 		for (k, kernel) in enumerate(m.precomputations["kernels"][drug])
 			# G
 			# NOTE: alter prior to allow correlations between cell lines, i.e. have a matrix prior on nu
 			exp_e = expected_value(params.e[k])
 			exp_g_sum -= expected_value(params.G[t,k]) * exp_e
-			params.G[t,k].variational_covariance = Matrix(I, N[t], N[t]) .*
+			params.G[t,k].variational_covariance = Matrix(I, N[drug], N[drug]) .*
 				1. / (
 					2 * expected_value(params.ε[t]) *
 					expected_squared_value(params.e[k]) +
@@ -391,15 +255,17 @@ function parameter_inference_step(m::PredictionModel, mc::ModelConfiguration, pa
 			exp_g_sum += expected_value(params.G[t,k]) * exp_e
 		end
 	end
-	(dll, err) = data_likelihood(m, mc, params)
+
+	(dll, err) = data_likelihood(m, params)
+
 	ll += dll
 	ll, err
 end
 
-function data_likelihood(m::PredictionModel, mc::ModelConfiguration, params::BMTMKLModelParameters)
+function data_likelihood(m::PredictionModel{BMTMKLModel}, params::BMTMKLModelParameters)
 	ll = 0.
 	mse = 0
-	for (t, drug) in enumerate(keys(m.data.drugs))
+	for (t, drug) in enumerate(keys(m.data.results))
 		y_mean = sum(expected_value.(params.G[t,:]) .* expected_value.(params.e)) .+ expected_value(params.b[t])
 
 		y_cov = 1. / expected_value(params.ε[t])
@@ -408,19 +274,19 @@ function data_likelihood(m::PredictionModel, mc::ModelConfiguration, params::BMT
 		y_mean_rescaled = y_mean .* m.data.results[drug].outcome_std .+ m.data.results[drug].outcome_mean
 		outcomes_rescaled = actual_outcomes .* m.data.results[drug].outcome_std .+ m.data.results[drug].outcome_mean
 
-		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov .* Matrix(I, mc.params["N"][t], mc.params["N"][t])), actual_outcomes)
+		ll += Distributions.logpdf(Distributions.MvNormal(y_mean, y_cov .* Matrix(I, params.N[drug], params.N[drug])), actual_outcomes)
 
 		mse += sum((outcomes_rescaled .- y_mean_rescaled).^2)
 	end
-	mse /= sum(mc.N)
+	mse /= sum(collect(values(params.N)))
 	(ll, mse)
 end
 
-function update_intermed_kernel_sum(model::PredictionModel, mc::ModelConfiguration, params::BMTMKLModelParameters)
-	ret = Dict{String, Vector{Float64}}()
-	for (t, drug) in enumerate(keys(m.data.drugs))
-		g_kernel_sum = zeros(mc.parameters["N"][t])
-		for (k, kernel) in enumerate(model.precomputations["kernels"][drug])
+function update_intermed_kernel_sum(m::PredictionModel{BMTMKLModel}, params::BMTMKLModelParameters)
+	ret = Dict{Drug, Vector{Float64}}()
+	for (t, drug) in enumerate(keys(m.data.results))
+		g_kernel_sum = zeros(params.N[drug])
+		for (k, kernel) in enumerate(m.precomputations["kernels"][drug])
 			g_kernel_sum += kernel * expected_value(params.G[t,k])
 		end
 		ret[drug] = g_kernel_sum
