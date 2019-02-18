@@ -1,6 +1,7 @@
 {
  "id": "NCI-H630",
 "cancer_type": "large_intestine",
+"in_test_set": true,
 "views": {
  "Methylation": [
  {

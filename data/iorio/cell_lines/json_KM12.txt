@@ -1,5 +1,6 @@
 {
  "id": "KM12",
+"in_test_set": true,
 "cancer_type": "large_intestine",
 "views": {
  "Methylation": [

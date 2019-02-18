@@ -1,6 +1,7 @@
 {
  "id": "GP5D",
 "cancer_type": "large_intestine",
+"in_test_set": true,
 "views": {
  "Methylation": [
  {

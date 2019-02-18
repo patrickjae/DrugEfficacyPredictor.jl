@@ -1,6 +1,7 @@
 {
  "id": "RCM-1",
 "cancer_type": "large_intestine",
+"in_test_set": true,
 "views": {
  "Methylation": [
  {

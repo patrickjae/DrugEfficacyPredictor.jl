@@ -1,6 +1,7 @@
 {
  "id": "COLO-205",
 "cancer_type": "large_intestine",
+"in_test_set": true,
 "views": {
  "Methylation": [
  {
