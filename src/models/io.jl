@@ -1,24 +1,3 @@
-"""
-Read in inference configuration.
-"""
-function read_inference_configuration(data::Dict{String, Any})
-    ic = InferenceConfiguration()
-    if haskey(data, "inference_configuration")
-        ic_data = data["inference_configuration"]
-        if haskey(ic_data, "model_config") ic.model_config = Meta.eval(Symbol(ic_data["model_config"])) end
-        if haskey(ic_data, "convergence_criterion") ic.convergence_criterion = ic_data["convergence_criterion"] end
-        if haskey(ic_data, "min_iter") ic.min_iter = ic_data["min_iter"] end
-        if haskey(ic_data, "max_iter") ic.max_iter = ic_data["max_iter"] end
-        if haskey(ic_data, "do_gridsearch") ic.do_gridsearch = ic_data["do_gridsearch"] end
-        if haskey(ic_data, "do_cross_validation") ic.do_cross_validation = ic_data["do_cross_validation"] end
-        if haskey(ic_data, "compute_wpc_index") ic.compute_wpc_index = ic_data["compute_wpc_index"] end
-        if haskey(ic_data, "do_variance_filtering") ic.do_variance_filtering = ic_data["do_variance_filtering"] end
-        if haskey(ic_data, "subsume_pathways") ic.subsume_pathways = ic_data["subsume_pathways"] end
-    end
-    ic
-end
-
-
 function create_response_file(pm::PredictionModel, test::Bool, target_dir::String, filename::String)
     response_file = joinpath(target_dir, filename)
     f = open(response_file, "w")
@@ -48,7 +27,7 @@ function create_response_file(pm::PredictionModel, test::Bool, target_dir::Strin
 end
 
 
-function write_results(pm::PredictionModel, mc::ModelConfiguration, p::PredictionModelParameters,
+function write_results(pm::PredictionModel, p::PredictionModelParameters,
         parent_dir::String, filename::String,
         predictions::Dict{Drug, Vector{Float64}}, ranks::Dict{Drug, Vector{Int64}})
     # write predictions and true values
@@ -108,10 +87,11 @@ function write_results(pm::PredictionModel, mc::ModelConfiguration, p::Predictio
     f = open(model_file, "w")
     # T, K, N
     @printf(f, "T\tK\n")
-    @printf(f, "%d\t%d\n", mc.T, mc.K)
+    @printf(f, "%d\t%d\n", p.T, p.K)
     @printf(f, "N\n")
-    [@printf(f, "%d\t", n) for n in mc.N[1:end-1]]
-    @printf(f, "%d\n", mc.N[end])
+    N = collect(values(p.N))
+    [@printf(f, "%d\t", n) for n in N[1:end-1]]
+    @printf(f, "%d\n", N[end])
     # gamma
     @printf(f, "ɣ\n")
     [@printf(f, "%.5f\t", expected_value(val)) for val in p.ɣ[1:end-1]]
@@ -148,7 +128,7 @@ function write_results(pm::PredictionModel, mc::ModelConfiguration, p::Predictio
     @printf(f, "%.5f\n", expected_value(p.ν[end]))
     # G
     @printf(f, "G\n")
-    for t in 1:mc.T, k in 1:mc.K
+    for t in 1:p.T, k in 1:p.K
         exp_g = expected_value(p.G[t,k])
         @printf(f, "%s:\t", p.G[t,k].var_name)
         [@printf(f, "%.5f\t", val) for val in exp_g[1:end-1]]
