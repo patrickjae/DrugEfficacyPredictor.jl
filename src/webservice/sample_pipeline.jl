@@ -44,6 +44,32 @@ function load_iorio_data(req::HTTP.Request)
 end
 
 
+function load_dream_challenge_data(req::HTTP.Request)
+    request_dictionary = Dict{String, String}()
+    if length(req.body) > 0
+        request_dictionary = JSON.parse(transcode(String, req.body))
+    end
+    host = "localhost"
+    base_dir = joinpath(PROJECT_ROOT, "data", "dream_challenge")
+    force_reload = haskey(request_dictionary, "force_reload") ? request_dictionary["force_reload"] : false
+    if Utils.experiment_registered("dream_challenge")
+        if force_reload
+            proc_id = Utils.unregister_experiment("dream_challenge")
+            @spawnat proc_id Data.delete_experiment("dream_challenge")
+        else
+            req.response.status = 200
+            req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "DREAM Challenge data set already exists, returning experiment ID. If you need to reload, call with parameter force_reload = true", "experiment_id" => "dream_challenge")))
+            return req.response
+        end
+    end
+    proc_id = Utils.register_experiment("dream_challenge")
+    remotecall_wait(Data.load_dream_challenge_data, proc_id)
+
+    req.response.status = 200
+    req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Created DREAM Challenge data set", "experiment_id" => "dream_challenge")))
+    return req.response
+end
+
 # function run_dreamchallenge_data(pathways_file::AbstractString, dest_dir::AbstractString="results/")
 #     @async start_server(8888)
 #     srv_shutdown_cmd = `curl http://localhost:8888/stop`
