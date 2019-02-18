@@ -1,3 +1,9 @@
+function debug_request(req::HTTP.Request)
+    Core.println(req)
+    req.response.status = 200
+    req.response
+end
+
 # base requests
 function handle_base_request(req::HTTP.Request)
    target = req.target
@@ -27,10 +33,10 @@ function train_request(req::HTTP.Request)
    request_dictionary = JSON.parse(transcode(String, req.body))
    experiment_id = get_experiment_id(req.target)
 
-   if !experiment_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
-   proc_id = experiments_dictionary[experiment_id]
+   proc_id = get_experiment_process(experiment_id)
    @spawnat proc_id Models.train(experiment_id, request_dictionary)
 
    req.response.status = 200
@@ -40,24 +46,25 @@ end
 
 function progress_request(req::HTTP.Request)
    experiment_id = get_experiment_id(req.target)
-   if !progress_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
-   log_message("found experiment id in progress tracker")
    req.response.status = 200
-   progress = training_progress[experiment_id]
-   req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => experiment_id, "progress" => progress)))
+   req.response.body = create_response(JSON.json(Dict("status" => "success", "experiment_id" => experiment_id, "progress" => Utils.get_progress(experiment_id))))
    req.response
 end
 
 function results_request(req::HTTP.Request)
    experiment_id = get_experiment_id(req.target)
-   if !result_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
+       return no_experiment_response(req)
+   end
+   result_file = Utils.get_result(experiment_id)
+   if get_result(experiment_id) == ""
        req.response.status = 500
        req.response.body = create_response(JSON.json(Dict("status" => "failure", "message" => "No results found for experiment with ID '$experiment_id'")))
        return req.response
    end
-   result_file = result_file_dictionary[experiment_id]
    req.response.status = 200
    req.response.headers = [Pair("Content-type", "application/zip")]
    req.response.body = read(result_file)
@@ -67,10 +74,10 @@ end
 function predict_request(req::HTTP.Request)
    request_dictionary = JSON.parse(transcode(String, req.body))
    experiment_id = get_experiment_id(req.target)
-   if !experiment_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
-   proc_id = experiments_dictionary[experiment_id]
+   proc_id = Utils.get_experiment_process(experiment_id)
 
    prediction_result = nothing
    try
@@ -94,13 +101,14 @@ function handle_create_experiment_request(req::HTTP.Request)
    create_message = "Created new experiment."
    if haskey(request_dictionary, "experiment_id")
        exp_id_wanted = request_dictionary["experiment_id"]
-       if !experiment_exists(exp_id_wanted)
+       if !Utils.experiment_registered(exp_id_wanted)
            exp_id = exp_id_wanted
        else
            create_message *= " Your requested experiment_id is already in use, we have created a random one."
        end
    end
-   add_experiment(exp_id)
+   proc_id = Utils.register_experiment(exp_id)
+   remotecall_wait(Data.create_experiment, proc_id, exp_id)
    req.response.status = 200
    req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => create_message, "experiment_id" => exp_id)))
    req.response
@@ -108,10 +116,10 @@ end
 
 function handle_get_experiment_request(req::HTTP.Request)
    experiment_id = get_experiment_id(req.target)
-   if !experiment_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
-   proc_id = experiments_dictionary[experiment_id]
+   proc_id = get_experiment_process(experiment_id)
    response_string = remotecall_fetch(Data.to_json, proc_id, experiment_id)
    req.response.status = 200
    req.response.body = create_response(JSON.json(response_string))
@@ -120,10 +128,11 @@ end
 
 function handle_delete_experiment_request(req::HTTP.Request)
    experiment_id = get_experiment_id(req.target)
-   if !experiment_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
-   delete_experiment(experiment_id)
+   proc_id = unregister_experiment(experiment_id)
+   remotecall_wait(Data.delete_experiment, proc_id, experiment_id)
    req.response.status = 200
    req.response.body = create_response(JSON.json(Dict("status" => "success", "message" => "Deleted experiment with id '$experiment_id'")))
    return req.response
@@ -137,10 +146,10 @@ handle_delete_collection_request(req::HTTP.Request) = handle_collection_request(
 function handle_collection_request(req::HTTP.Request, action::String)
    target = req.target
    experiment_id = get_experiment_id(target)
-   if !experiment_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
-   proc_id = experiments_dictionary[experiment_id]
+   proc_id = get_experiment_process(experiment_id)
    data_target = get_function_target(target)
 
    target_function = eval(Meta.parse("Data.$(action)_$data_target"))
@@ -148,11 +157,9 @@ function handle_collection_request(req::HTTP.Request, action::String)
        obj = nothing
        if action == "create"
            request_dictionary = JSON.parse(transcode(String, req.body))
-           remote_do(target_function, proc_id, experiment_id, request_dictionary)
-           # target_function(experiments_dictionary[experiment_id], request_dictionary)
+           remotecall_wait(target_function, proc_id, experiment_id, request_dictionary)
        else
            obj = remotecall_fetch(target_function, proc_id, experiment_id)
-           # obj = target_function(experiments_dictionary[experiment_id])
        end
        req.response.status = 200
        if obj == nothing
@@ -179,11 +186,11 @@ handle_delete_object_request(req::HTTP.Request) = handle_object_request(req, "de
 function handle_object_request(req::HTTP.Request, action::String)
    target = req.target
    experiment_id = get_experiment_id(target)
-   if !experiment_exists(experiment_id)
+   if !Utils.experiment_registered(experiment_id)
        return no_experiment_response(req)
    end
 
-   proc_id = experiments_dictionary[experiment_id]
+   proc_id = get_experiment_process(experiment_id)
    get_target = chop(get_function_target(target))
    get_target_id = get_object_id(target)
 
@@ -193,7 +200,7 @@ function handle_object_request(req::HTTP.Request, action::String)
    #get the object
    getter_function = eval(Meta.parse("Data.$(action)_$get_target"))
    try
-       obj = remotecall_fetch((eid, tid) -> getter_function(experiments[eid], tid), proc_id, experiment_id, get_target_id)
+       obj = remotecall_fetch(getter_function, proc_id, experiment_id, get_target_id)
        # obj = getter_function(experiments_dictionary[experiment_id], get_target_id)
        req.response.status = 200
        if obj == nothing
