@@ -2,7 +2,6 @@
 
 # create the overall data set
 function create_experiment(id::String = string(UUIDs.uuid4()))
-	Core.println("Data.create_experiment($id)")
 	experiments[id] = Experiment(id)
 	experiments[id]
 end
@@ -13,6 +12,11 @@ function get_experiment(id::String)
 	else
 		throw(ArgumentError("unknown experiment id: $id"))
 	end
+end
+
+function delete_experiment(id::String)
+	delete!(experiments, id)
+	Base.GC.gc(true)
 end
 
 ######### CELL LINES ###########
