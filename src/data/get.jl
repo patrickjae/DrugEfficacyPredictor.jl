@@ -6,6 +6,18 @@ get_proteins(experiment_id::String) = to_json(get_experiment(experiment_id).prot
 get_pathways(experiment_id::String) = to_json(collect(values(get_experiment(experiment_id).pathway_information)))
 get_outcomes(experiment_id::String) = to_json(collect(values(get_experiment(experiment_id).results)))
 
+get_cell_line(experiment_id::String, cell_line_id::String) = to_json(get_experiment(experiment_id).cell_lines[cell_line_id])
+get_drug(experiment_id::String, drug_id::String) = to_json(get_experiment(experiment_id).drugs[drug_id])
+get_gene(experiment_id::String, gene_id::String) = to_json(get_experiment(experiment_id).genes[parse(Int64, gene_id)])
+get_protein(experiment_id::String, protein_id::String) = to_json(get_experiment(experiment_id).proteins[protein_id])
+get_pathway(experiment_id::String, pw_id::String) = to_json(get_experiment(experiment_id).pathway_information[pw_id])
+
+function get_outcome(experiment_id::String, drug_id::String)
+    experiment = get_experiment(experiment_id)
+    d = experiment.drugs[drug_id]
+    to_json(experiment.results[d])
+end
+
 function to_json(data)
     response = Dict{String, Any}()
     response["message"] = "JSON serialization not yet implemented for $(typeof(data))"
