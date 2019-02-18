@@ -27,8 +27,9 @@ end
 
 function run_model(pm::PredictionModel, inference_config::InferenceConfiguration, model_config::ModelConfiguration)
     # things to do only once (or once per fold)
-    # compute kernels and cross kernels depending on which cell lines are in the training and test set
-    post_init(pm)
+    # for BMTMKL, this computes kernels and cross kernels depending on which cell lines
+    # are in the training and test set
+    post_init!(pm, model_config)
     # result dir is the target directory amended by the fold
     result_dir = inference_config.do_cross_validation ? joinpath(inference_config.target_dir, string(inference_config.fold_num)) : inference_config.target_dir
     mkpath(result_dir)
@@ -38,9 +39,9 @@ function run_model(pm::PredictionModel, inference_config::InferenceConfiguration
 
         # 1) create files with test responses and training responses respectively (for this fold)
         # training
-        training_response_file = create_response_file(dep, false, result_dir, "training_response.txt")
+        training_response_file = create_response_file(pm, false, result_dir, "training_response.txt")
         # test
-        test_response_file = create_response_file(dep, true, result_dir, "test_response.txt")
+        test_response_file = create_response_file(pm, true, result_dir, "test_response.txt")
 
         # 2) create random predictions from these
         script_name = joinpath(PROJECT_ROOT, "analytics", "create_random_predictions.pl")
@@ -79,7 +80,7 @@ function run_model(pm::PredictionModel, inference_config::InferenceConfiguration
         normal_vars = [.1, .5, 1., 2.]
         # normal_means = [1.]
         for alpha in gamma_dist_alphas, ratio in alpha_beta_ratios, v in normal_vars
-            mc = ModelConfiguration(pm.model_type, alpha, alpha/ratio, 1., v, pm)
+            mc = ModelConfiguration(alpha, alpha/ratio, 1., v, pm)
             # assume no bias, hence zero-mean priors on b
             mc.μ_b = 0.
             push!(all_model_configs, mc)
@@ -99,16 +100,16 @@ function run_model(pm::PredictionModel, inference_config::InferenceConfiguration
         mc = all_model_configs[i]
         # TODO: this assumes we are using the same values for all params, maybe change later
         # same for the generic filenam below
-        alpha = mc.⍺_ɣ
-        beta = mc.β_ɣ
-        mu = mc.μ_e
-        v = mc.𝜎_e
+        alpha = mc.parameters["α_ɣ"]
+        beta = mc.parameters["β_ɣ"]
+        mu = mc.parameters["μ_e"]
+        v = mc.parameters["σ_e"]
         Base.Threads.atomic_add!(cnt, 1)
         log_message("parameter setting $(cnt[]) (of $(length(all_model_configs))): alpha=$alpha, beta=$beta mu=$mu var=$v")
         # TODO: run each model multiple times (e.g. 10) and collect prediction results
         # report mean and variance of those predictions
         # log_message("calling parameter_inference method")
-        (lls, errs, test_errs, params, convergence) = inference(pm.model_type, pm, mc, inference_config = inference_config)
+        (lls, errs, test_errs, params, convergence) = inference(pm, mc, inference_config = inference_config)
         log_message("inference stats: likelihood=$(lls[end]) train_error=$(errs[end]) test_error=$(test_errs[end]) convergence=$convergence")
         # models[i] = model
         error_string = inference_config.do_cross_validation ?
@@ -117,13 +118,14 @@ function run_model(pm::PredictionModel, inference_config::InferenceConfiguration
         all_errors[i] = error_string
 
         (p, r) = predict_outcomes(pm, params, collect(values(pm.data.cell_lines)))
+        log_message("done predicting")
         # predictions[i] = p
         # ranks[i] = r
 
 
         generic_filename =  "alpha_$(alpha)_beta_$(beta)_mean_$(mu)_var_$(v).txt"
         # writing result files
-        write_results(pm, mc, params, result_dir, generic_filename, p, r)
+        write_results(pm, params, result_dir, generic_filename, p, r)
 
         resulting_ranking = joinpath(result_dir, "ranking", generic_filename)
 
