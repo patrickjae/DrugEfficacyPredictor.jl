@@ -13,7 +13,7 @@ function run_cross_validation(pm::PredictionModel, inference_config::InferenceCo
         end_idx = i == num_folds ? num_cl : i * cls_per_fold
 
         # mark cell lines as test and training set
-        for (cl_idx, cl) in enumerate(collect(values(m.data.cell_lines)))
+        for (cl_idx, cl) in enumerate(collect(values(pm.data.cell_lines)))
             if start_idx ≤ cl_idx ≤ end_idx
                 cl.in_test_set = true
             else
