@@ -41,11 +41,7 @@ function ModelConfiguration(
 	mc.parameters["N"] = OrderedDict{Drug, Int64}()
 	# NOTE: N (the number of samples per drug) is set in the post_init! method for this type of model
 	for drug in collect(keys(pm.data.results))
-<<<<<<< HEAD
 		mc.parameters["N"][drug] = length(filter((cl) -> !cl.in_test_set && haskey(pm.data.results[drug].outcome_values, cl), collect(values(pm.data.cell_lines))))
-=======
-		mc.parameters["N"][drug] = length(filter((cl) -> !cl.in_test_set && haskey(pm.data.results[drug].outcome_values, cl), collect(values(pm.data.cell_lines)))
->>>>>>> e6c64d1f42787631cd1c74ed639f565ccc3912bc
 	end
 	# recompute overall number of kernels (+4 accomodates for combined kernels)
 	mc.parameters["K"] = length(pm.precomputations["base_kernels"]) + sum(map(length, collect(values(pm.precomputations["pathway_specific_kernels"])))) + 4
