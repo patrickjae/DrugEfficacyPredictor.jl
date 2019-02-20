@@ -83,7 +83,7 @@ function run_model(pm::PredictionModel, inference_config::InferenceConfiguration
         normal_vars = [.1, .5, 1., 2.]
         # normal_means = [1.]
         for alpha in gamma_dist_alphas, ratio in alpha_beta_ratios, v in normal_vars
-            mc = ModelConfiguration(pm, alpha, alpha/ratio, 1., v, pm)
+            mc = ModelConfiguration(pm, alpha, alpha/ratio, 1., v)
             push!(all_model_configs, mc)
         end
         log_message("generated gridsearch configs ($(length(all_model_configs)))")
