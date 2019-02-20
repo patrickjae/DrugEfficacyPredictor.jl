@@ -36,14 +36,18 @@ function read_model_type(data::Dict{String, Any})
 end
 
 function read_model_configuration(pm::PredictionModel, data::Dict{String, Any})
-	log_message("read_model_configuration not implemented for $(typeof(pm))")
+	log_message("read_model_configuration not implemented for $(typeof(pm)), skipping...")
 end
 
-function init!(pm::PredictionModel, data::Dict{String, Any})
-	log_message("init! method not implemented, skipping...")
+function init!(pm::PredictionModel, ic::InferenceConfiguration)
+	log_message("init! method not implemented for $(typeof(pm)), skipping...")
 end
 
-function post_init!(pm::PredictionModel, mc::ModelConfiguration)
+function update_model_config!(pm::PredictionModel, mc::ModelConfiguration)
+	log_message("update_model_config! not implemented for $(typeof(pm)), skipping...")
+end
+
+function post_init!(pm::PredictionModel)
 	log_message("post_init! method not implemented, skipping...")
 end
 

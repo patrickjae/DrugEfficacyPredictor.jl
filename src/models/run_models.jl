@@ -32,6 +32,7 @@ function run_model(pm::PredictionModel, inference_config::InferenceConfiguration
     # are in the training and test set
     log_message("running post_init!")
     post_init!(pm)
+    if model_config != nothing update_model_config!(pm, model_config) end
     # result dir is the target directory amended by the fold
     result_dir = inference_config.do_cross_validation ? joinpath(inference_config.target_dir, string(inference_config.fold_num)) : inference_config.target_dir
     mkpath(result_dir)

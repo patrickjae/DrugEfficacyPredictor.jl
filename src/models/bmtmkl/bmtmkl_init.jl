@@ -55,6 +55,18 @@ function init!(m::PredictionModel{BMTMKLModel}, ic::InferenceConfiguration)
 	m.precomputations["pathway_specific_kernels"] = pathway_specific_kernels
 end
 
+
+function update_model_config!(pm::PredictionModel{BMTMKLModel}, mc::ModelConfiguration)
+	mc.parameters["T"] = length(pm.data.drugs)
+	mc.parameters["N"] = OrderedDict{Drug, Int64}()
+	for drug in collect(keys(pm.data.results))
+		# N[t] is the number of cell lines for which we have a result and that are in the training set
+		mc.parameters["N"][drug] = length(filter((cl) -> !cl.in_test_set && haskey(pm.data.results[drug].outcome_values, cl), collect(values(pm.data.cell_lines))))
+	end
+	# recompute overall number of kernels (+4 accomodates for combined kernels)
+	mc.parameters["K"] = length(pm.precomputations["base_kernels"]) + sum(map(length, collect(values(pm.precomputations["pathway_specific_kernels"])))) + 4
+end
+
 function post_init!(m::PredictionModel{BMTMKLModel})
     # collect outcomes statistics, only on results used for training
     for (t, drug) in enumerate(keys(m.data.results))
@@ -63,6 +75,7 @@ function post_init!(m::PredictionModel{BMTMKLModel})
         m.data.results[drug].outcome_mean = mean(vals)
         m.data.results[drug].outcome_std = stdm(vals, m.data.results[drug].outcome_mean)
     end
+	log_message("collected statistics")
     all_drugs = collect(keys(m.data.results)) # the tasks
     cell_lines = collect(values(m.data.cell_lines)) # all cell lines in the experiment, excluding held-out data
 
@@ -76,7 +89,6 @@ function post_init!(m::PredictionModel{BMTMKLModel})
     # target values for test data
     test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
-	# log_message("resetting N")
     for (t, drug) in enumerate(all_drugs)
         #init
         kernels[drug] = Vector{Matrix{Float64}}()

@@ -39,8 +39,8 @@ function ModelConfiguration(
 	# get number of tasks (drugs)
 	mc.parameters["T"] = length(pm.data.drugs)
 	mc.parameters["N"] = OrderedDict{Drug, Int64}()
-	# NOTE: N (the number of samples per drug) is set in the post_init! method for this type of model
 	for drug in collect(keys(pm.data.results))
+		# N[t] is the number of cell lines for which we have a result and that are in the training set
 		mc.parameters["N"][drug] = length(filter((cl) -> !cl.in_test_set && haskey(pm.data.results[drug].outcome_values, cl), collect(values(pm.data.cell_lines))))
 	end
 	# recompute overall number of kernels (+4 accomodates for combined kernels)
