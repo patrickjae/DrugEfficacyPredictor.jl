@@ -55,7 +55,7 @@ function init!(m::PredictionModel{BMTMKLModel}, ic::InferenceConfiguration)
 	m.precomputations["pathway_specific_kernels"] = pathway_specific_kernels
 end
 
-function post_init!(m::PredictionModel{BMTMKLModel}, mc::ModelConfiguration)
+function post_init!(m::PredictionModel{BMTMKLModel})
     # collect outcomes statistics, only on results used for training
     for (t, drug) in enumerate(keys(m.data.results))
         vals = Float64[]
@@ -76,9 +76,6 @@ function post_init!(m::PredictionModel{BMTMKLModel}, mc::ModelConfiguration)
     # target values for test data
     test_targets = DataStructures.OrderedDict{Drug, Vector{Float64}}()
 
-	# get number of results per taks (drug)
-	mc.parameters["N"] = DataStructures.OrderedDict{Drug,Int64}()
-
 	# log_message("resetting N")
     for (t, drug) in enumerate(all_drugs)
         #init
@@ -92,8 +89,6 @@ function post_init!(m::PredictionModel{BMTMKLModel}, mc::ModelConfiguration)
         # get their indicex in original cell line array
         idx_in_cell_lines = findall((in)(result_cell_lines), cell_lines)
         test_idx_in_cell_lines = findall((in)(test_result_cell_lines), cell_lines)
-
-        mc.parameters["N"][drug] = length(idx_in_cell_lines)
 
         #construct the kernels
         for v in m.data.views
