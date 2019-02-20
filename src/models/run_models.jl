@@ -20,13 +20,13 @@ function run_cross_validation(pm::PredictionModel, inference_config::InferenceCo
                 cl.in_test_set = false
             end
         end
-        log_message("reshuffled training/test set")
         inference_config.fold_num = i
+        log_message("reshuffled training/test set and set fold to $i")
         run_model(pm, inference_config, model_config)
     end
 end
 
-function run_model(pm::PredictionModel, inference_config::InferenceConfiguration, model_config::ModelConfiguration)
+function run_model(pm::PredictionModel, inference_config::InferenceConfiguration, model_config::Union{Nothing, ModelConfiguration})
     # things to do only once (or once per fold)
     # for BMTMKL, this computes kernels and cross kernels depending on which cell lines
     # are in the training and test set
