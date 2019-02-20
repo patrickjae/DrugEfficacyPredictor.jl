@@ -75,7 +75,6 @@ function post_init!(m::PredictionModel{BMTMKLModel})
         m.data.results[drug].outcome_mean = mean(vals)
         m.data.results[drug].outcome_std = stdm(vals, m.data.results[drug].outcome_mean)
     end
-	log_message("collected statistics")
     all_drugs = collect(keys(m.data.results)) # the tasks
     cell_lines = collect(values(m.data.cell_lines)) # all cell lines in the experiment, excluding held-out data
 
@@ -146,6 +145,7 @@ function post_init!(m::PredictionModel{BMTMKLModel})
 	m.precomputations["cross_kernels"] = cross_kernels
 	m.precomputations["targets"] = targets
 	m.precomputations["test_targets"] = test_targets
+	log_message("done post init")
 	nothing
  end
 
